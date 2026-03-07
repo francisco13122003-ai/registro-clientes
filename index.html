@@ -1,0 +1,1181 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta
+      name="description"
+      content="Gestor interno de clientes, empresas, adjuntos, registro y contabilidad de Flopitec."
+    />
+    <meta name="theme-color" content="#0b0f14" />
+    <title>Flopitec · Gestor de Clientes y Registro</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">
+          <img src="./logo.PNG" alt="Flopitec" />
+        </div>
+
+        <div class="brand-text">
+          <p class="brand-kicker">Flopitec Servicios Informáticos</p>
+          <h1 class="brand-title">Gestor de Clientes</h1>
+          <p class="brand-subtitle">
+            Clientes · Empresas · Registro · Adjuntos · Contabilidad
+          </p>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <div class="nav-arrows" aria-label="Historial de navegación interna">
+          <button
+            id="btnNavBack"
+            class="icon-btn"
+            type="button"
+            title="Atrás"
+            aria-label="Atrás"
+          >
+            ←
+          </button>
+
+          <button
+            id="btnNavForward"
+            class="icon-btn"
+            type="button"
+            title="Adelante"
+            aria-label="Adelante"
+          >
+            →
+          </button>
+        </div>
+
+        <div class="session-area">
+          <div
+            id="netStatus"
+            class="badge"
+            role="status"
+            aria-live="polite"
+          >
+            Conectando...
+          </div>
+
+          <button id="btnOfflineCount" class="btn btn-ghost" type="button">
+            Pendientes: 0
+          </button>
+
+          <button id="btnOfflineExport" class="btn btn-ghost" type="button">
+            Exportar backup
+          </button>
+
+          <div
+            id="sessionBadge"
+            class="badge hidden"
+            role="status"
+            aria-live="polite"
+          ></div>
+
+          <button
+            id="btnLogout"
+            class="btn btn-ghost hidden"
+            type="button"
+          >
+            Salir
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <!-- LOGIN -->
+      <section
+        id="viewLogin"
+        class="card auth-card"
+        aria-labelledby="loginTitle"
+      >
+        <div class="section-heading">
+          <h2 id="loginTitle">Acceso</h2>
+          <p class="muted">
+            Entra con el usuario autorizado de la tienda para gestionar fichas,
+            registros, adjuntos y contabilidad.
+          </p>
+        </div>
+
+        <div class="grid2">
+          <div class="field">
+            <label for="loginEmail">Email</label>
+            <input
+              id="loginEmail"
+              type="email"
+              placeholder="empleado@tu-tienda.com"
+              autocomplete="username"
+              inputmode="email"
+            />
+          </div>
+
+          <div class="field">
+            <label for="loginPassword">Contraseña</label>
+            <input
+              id="loginPassword"
+              type="password"
+              placeholder="••••••••"
+              autocomplete="current-password"
+            />
+          </div>
+        </div>
+
+        <div class="row row-spaced">
+          <button id="btnLogin" class="btn btn-primary" type="button">
+            Entrar
+          </button>
+          <span id="loginMsg" class="muted" aria-live="polite"></span>
+        </div>
+      </section>
+
+      <!-- APP -->
+      <section id="viewApp" class="hidden">
+        <!-- NAV -->
+        <nav class="nav card" aria-label="Navegación principal">
+          <button class="nav-btn" data-nav="home" type="button">Inicio</button>
+          <button class="nav-btn" data-nav="registry" type="button">
+            Registro
+          </button>
+          <button class="nav-btn" data-nav="accounting" type="button">
+            Contabilidad
+          </button>
+          <button class="nav-btn" data-nav="create" type="button">
+            Crear ficha
+          </button>
+          <button class="nav-btn" data-nav="search" type="button">
+            Buscar
+          </button>
+          <button class="nav-btn" data-nav="companies" type="button">
+            Empresas
+          </button>
+        </nav>
+
+        <!-- ALERT / TOAST -->
+        <div
+          id="toast"
+          class="toast hidden"
+          role="alert"
+          aria-live="assertive"
+        ></div>
+
+        <!-- HOME -->
+        <section
+          id="panelHome"
+          class="card panel"
+          aria-labelledby="panelHomeTitle"
+        >
+          <div class="section-heading">
+            <h2 id="panelHomeTitle">Inicio</h2>
+            <p class="muted">
+              Acceso rápido a las funciones principales de la aplicación.
+            </p>
+          </div>
+
+          <div class="tiles tiles-5">
+            <button class="tile" data-nav="registry" type="button">
+              <span class="tile-badge">Registro</span>
+              <div class="tile-title">Ventas y reparaciones</div>
+              <div class="tile-subtitle">
+                Tickets · Otros · Facturas · Nico
+              </div>
+            </button>
+
+            <button class="tile" data-nav="accounting" type="button">
+              <span class="tile-badge">Contabilidad</span>
+              <div class="tile-title">Resumen por meses y trimestres</div>
+              <div class="tile-subtitle">
+                Cómputo anual separado por tipo
+              </div>
+            </button>
+
+            <button class="tile" data-nav="create" type="button">
+              <span class="tile-badge">Clientes</span>
+              <div class="tile-title">Crear ficha</div>
+              <div class="tile-subtitle">
+                Alta rápida de cliente o empresa
+              </div>
+            </button>
+
+            <button class="tile" data-nav="search" type="button">
+              <span class="tile-badge">Búsqueda</span>
+              <div class="tile-title">Buscar ficha</div>
+              <div class="tile-subtitle">
+                Nombre · teléfono · CIF · razón social
+              </div>
+            </button>
+
+            <button class="tile" data-nav="companies" type="button">
+              <span class="tile-badge">Empresas</span>
+              <div class="tile-title">Listado empresarial</div>
+              <div class="tile-subtitle">
+                Clientes marcados como empresa
+              </div>
+            </button>
+          </div>
+
+          <div class="subcard dashboard-strip">
+            <div class="dashboard-item">
+              <span class="dashboard-label">Registros recientes</span>
+              <strong id="homeRecentTxCount" class="dashboard-value">—</strong>
+            </div>
+
+            <div class="dashboard-item">
+              <span class="dashboard-label">Clientes totales</span>
+              <strong id="homeCustomersCount" class="dashboard-value">—</strong>
+            </div>
+
+            <div class="dashboard-item">
+              <span class="dashboard-label">Empresas totales</span>
+              <strong id="homeCompaniesCount" class="dashboard-value">—</strong>
+            </div>
+
+            <div class="dashboard-item">
+              <span class="dashboard-label">Pendientes offline</span>
+              <strong id="homeOfflineCount" class="dashboard-value">—</strong>
+            </div>
+          </div>
+        </section>
+
+        <!-- REGISTRY -->
+        <section
+          id="panelRegistry"
+          class="card panel hidden"
+          aria-labelledby="panelRegistryTitle"
+        >
+          <div class="panel-head">
+            <div>
+              <h2 id="panelRegistryTitle">Registro</h2>
+              <p class="muted small">
+                Histórico de ventas y reparaciones ordenado de más reciente a
+                más antiguo.
+              </p>
+            </div>
+
+            <div class="row">
+              <button id="btnNewTx" class="btn btn-primary" type="button">
+                Crear venta / reparación
+              </button>
+            </div>
+          </div>
+
+          <div class="tabs" role="tablist" aria-label="Tipos de registro">
+            <button
+              class="tab-btn"
+              data-regtab="ticket"
+              type="button"
+              role="tab"
+            >
+              Tickets
+            </button>
+            <button
+              class="tab-btn"
+              data-regtab="otro"
+              type="button"
+              role="tab"
+            >
+              Otros
+            </button>
+            <button
+              class="tab-btn"
+              data-regtab="factura"
+              type="button"
+              role="tab"
+            >
+              Facturas
+            </button>
+            <button
+              class="tab-btn"
+              data-regtab="nico"
+              type="button"
+              role="tab"
+            >
+              Nico
+            </button>
+          </div>
+
+          <div class="subcard registry-toolbar">
+            <div class="grid2 grid2-compact">
+              <div class="field">
+                <label for="registryFilterInput">Filtrar en la lista</label>
+                <input
+                  id="registryFilterInput"
+                  type="text"
+                  placeholder="Cliente, teléfono, comentarios, concepto..."
+                />
+              </div>
+
+              <div class="field">
+                <label for="registryDateFrom">Rango de fechas</label>
+                <div class="inline-fields">
+                  <input id="registryDateFrom" type="date" />
+                  <input id="registryDateTo" type="date" />
+                </div>
+              </div>
+            </div>
+
+            <div class="row row-spaced row-end">
+              <div class="muted small">
+                Total registros visibles:
+                <strong id="registryVisibleCount">0</strong>
+              </div>
+              <div class="muted small">
+                Suma visible:
+                <strong id="registryVisibleAmount">0.00 €</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- FORMULARIO DE TRANSACCIÓN -->
+          <section
+            id="txFormBox"
+            class="subcard hidden"
+            aria-labelledby="txFormTitle"
+          >
+            <div class="panel-head">
+              <div>
+                <h3 id="txFormTitle">Nueva ficha</h3>
+                <p class="muted small">
+                  Selecciona un cliente o crea uno nuevo y completa los datos
+                  del registro.
+                </p>
+              </div>
+
+              <div class="row">
+                <button id="btnTxCancel" class="btn btn-ghost" type="button">
+                  Cerrar
+                </button>
+              </div>
+            </div>
+
+            <!-- Cliente -->
+            <div class="grid2">
+              <div class="field">
+                <label for="txCustomerSearch">Cliente (buscar)</label>
+                <input
+                  id="txCustomerSearch"
+                  type="text"
+                  placeholder="Escribe nombre, apellidos, teléfono, CIF..."
+                  autocomplete="off"
+                />
+                <div
+                  id="txCustomerResults"
+                  class="mini-list"
+                  role="listbox"
+                  aria-label="Resultados de clientes"
+                ></div>
+              </div>
+
+              <div class="subcard subcard-tight selected-customer-card">
+                <div class="muted small">Cliente seleccionado</div>
+                <div id="txCustomerSelected" class="bigline">—</div>
+
+                <div class="row row-spaced">
+                  <button
+                    id="btnTxCreateCustomer"
+                    class="btn btn-ghost"
+                    type="button"
+                  >
+                    Crear ficha (cliente / empresa)
+                  </button>
+
+                  <button
+                    id="btnTxClearCustomer"
+                    class="btn btn-ghost"
+                    type="button"
+                  >
+                    Quitar
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="hr"></div>
+
+            <!-- Campos comunes -->
+            <div id="txCommonFields" class="grid2">
+              <div class="field">
+                <label for="txDate">Fecha</label>
+                <input id="txDate" type="date" />
+              </div>
+
+              <div class="field">
+                <label for="txPayment">Método de pago</label>
+                <select id="txPayment" class="select">
+                  <option value="">—</option>
+                  <option value="efectivo">Efectivo</option>
+                  <option value="tarjeta">Tarjeta</option>
+                  <option value="bizum">Bizum</option>
+                  <option value="transferencia">Transferencia</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Items -->
+            <section
+              id="txItemsBox"
+              class="subcard subcard-tight"
+              aria-labelledby="txItemsTitle"
+            >
+              <div class="panel-head">
+                <div>
+                  <h3 id="txItemsTitle">Ventas / Reparaciones</h3>
+                  <p class="muted small">
+                    Puedes añadir varias líneas con distintos conceptos e
+                    importes.
+                  </p>
+                </div>
+
+                <div class="row">
+                  <button
+                    id="btnAddItem"
+                    class="btn btn-ghost"
+                    type="button"
+                  >
+                    + Añadir línea
+                  </button>
+                </div>
+              </div>
+
+              <div id="txItems" class="items"></div>
+
+              <div id="txItemsEmpty" class="empty-box hidden">
+                Todavía no hay líneas añadidas.
+              </div>
+
+              <div class="summary-row">
+                <div class="summary-card">
+                  <span class="summary-label">Total</span>
+                  <strong id="txTotal" class="mono summary-value">0.00 €</strong>
+                </div>
+              </div>
+            </section>
+
+            <!-- Nico -->
+            <section
+              id="txNicoBox"
+              class="subcard subcard-tight hidden"
+              aria-labelledby="txNicoTitle"
+            >
+              <div class="panel-head">
+                <div>
+                  <h3 id="txNicoTitle">Registro tipo Nico</h3>
+                  <p class="muted small">
+                    Desglose del trabajo, reparto y cantidad cobrada.
+                  </p>
+                </div>
+              </div>
+
+              <div class="grid2">
+                <div class="field">
+                  <label for="nicoConcept">Concepto</label>
+                  <input
+                    id="nicoConcept"
+                    type="text"
+                    placeholder="Ej: Reparación de móvil..."
+                  />
+                </div>
+
+                <div class="field">
+                  <label for="nicoMaterial">Precio del material (€)</label>
+                  <input
+                    id="nicoMaterial"
+                    type="number"
+                    step="0.01"
+                    inputmode="decimal"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div class="field">
+                  <label for="nicoTotal">Importe total (€)</label>
+                  <input
+                    id="nicoTotal"
+                    type="number"
+                    step="0.01"
+                    inputmode="decimal"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div class="field">
+                  <label for="nicoForNico">Importe para Nico (€)</label>
+                  <input
+                    id="nicoForNico"
+                    type="number"
+                    step="0.01"
+                    inputmode="decimal"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div class="field">
+                  <label for="nicoForFlopitec">Importe para Flopitec (€)</label>
+                  <input
+                    id="nicoForFlopitec"
+                    type="number"
+                    step="0.01"
+                    inputmode="decimal"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div class="field">
+                  <label for="nicoPaid">Cantidad cobrada (€)</label>
+                  <input
+                    id="nicoPaid"
+                    type="number"
+                    step="0.01"
+                    inputmode="decimal"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div class="field field-full">
+                  <label for="nicoNotes">Observaciones</label>
+                  <input
+                    id="nicoNotes"
+                    type="text"
+                    placeholder="Ej: falta pagar 20 €, pendiente de recogida..."
+                  />
+                </div>
+              </div>
+            </section>
+
+            <div class="field">
+              <label for="txComments">Comentarios</label>
+              <textarea
+                id="txComments"
+                class="textarea"
+                placeholder="Notas internas..."
+              ></textarea>
+            </div>
+
+            <div class="row row-spaced">
+              <button id="btnTxSave" class="btn btn-primary" type="button">
+                Guardar
+              </button>
+              <button
+                id="btnTxDelete"
+                class="btn btn-danger hidden"
+                type="button"
+              >
+                Eliminar
+              </button>
+              <button
+                id="btnTxReset"
+                class="btn btn-ghost"
+                type="button"
+              >
+                Limpiar formulario
+              </button>
+              <span id="txMsg" class="muted" aria-live="polite"></span>
+            </div>
+          </section>
+
+          <div class="list-head muted">
+            <span>Listado</span>
+            <span id="txListCount">0 resultados</span>
+          </div>
+
+          <div id="txList" class="list list-scroll"></div>
+
+          <div id="txListEmpty" class="empty-box hidden">
+            No hay registros para mostrar en esta sección.
+          </div>
+        </section>
+
+        <!-- ACCOUNTING -->
+        <section
+          id="panelAccounting"
+          class="card panel hidden"
+          aria-labelledby="panelAccountingTitle"
+        >
+          <div class="panel-head">
+            <div>
+              <h2 id="panelAccountingTitle">Contabilidad</h2>
+              <p class="muted small">
+                Resumen por años, meses y trimestres, separado por Tickets,
+                Otros, Facturas y Nico.
+              </p>
+            </div>
+
+            <div class="row">
+              <div class="field compact-field">
+                <label for="accountingYear">Año</label>
+                <select id="accountingYear" class="select">
+                  <option value="">Seleccionar año</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="tabs"
+            role="tablist"
+            aria-label="Tipos de contabilidad"
+          >
+            <button
+              class="tab-btn"
+              data-acctab="ticket"
+              type="button"
+              role="tab"
+            >
+              Tickets
+            </button>
+            <button
+              class="tab-btn"
+              data-acctab="otro"
+              type="button"
+              role="tab"
+            >
+              Otros
+            </button>
+            <button
+              class="tab-btn"
+              data-acctab="factura"
+              type="button"
+              role="tab"
+            >
+              Facturas
+            </button>
+            <button
+              class="tab-btn"
+              data-acctab="nico"
+              type="button"
+              role="tab"
+            >
+              Nico
+            </button>
+          </div>
+
+          <div class="subcard accounting-summary">
+            <div class="summary-card">
+              <span class="summary-label">Total anual</span>
+              <strong id="accountingYearTotal" class="summary-value mono">
+                0.00 €
+              </strong>
+            </div>
+
+            <div class="summary-card">
+              <span class="summary-label">1er trimestre</span>
+              <strong id="accountingQ1" class="summary-value mono">
+                0.00 €
+              </strong>
+            </div>
+
+            <div class="summary-card">
+              <span class="summary-label">2º trimestre</span>
+              <strong id="accountingQ2" class="summary-value mono">
+                0.00 €
+              </strong>
+            </div>
+
+            <div class="summary-card">
+              <span class="summary-label">3er trimestre</span>
+              <strong id="accountingQ3" class="summary-value mono">
+                0.00 €
+              </strong>
+            </div>
+
+            <div class="summary-card">
+              <span class="summary-label">4º trimestre</span>
+              <strong id="accountingQ4" class="summary-value mono">
+                0.00 €
+              </strong>
+            </div>
+          </div>
+
+          <div class="subcard">
+            <div class="panel-head">
+              <div>
+                <h3>Detalle mensual</h3>
+                <p class="muted small">
+                  Muestra el total por cada mes y el acumulado por trimestre.
+                </p>
+              </div>
+            </div>
+
+            <div class="accounting-table-wrap">
+              <table class="table accounting-table">
+                <thead>
+                  <tr>
+                    <th>Mes</th>
+                    <th>Total del mes</th>
+                    <th>Trimestre</th>
+                    <th>Acumulado trimestre</th>
+                  </tr>
+                </thead>
+                <tbody id="accountingTableBody"></tbody>
+              </table>
+            </div>
+
+            <div id="accountingEmpty" class="empty-box hidden">
+              No hay datos contables para este tipo y año.
+            </div>
+          </div>
+        </section>
+
+        <!-- CREATE / EDIT -->
+        <section
+          id="panelCreate"
+          class="card panel hidden"
+          aria-labelledby="formTitle"
+        >
+          <div class="panel-head">
+            <div>
+              <h2 id="formTitle">Crear ficha</h2>
+              <p class="muted small">
+                Los campos con <span class="req">*</span> son obligatorios.
+              </p>
+            </div>
+
+            <div class="row">
+    <button
+    id="btnCancelEdit"
+    class="btn btn-ghost hidden"
+    type="button"
+  >
+    Cancelar edición
+  </button>
+
+  <button
+    id="btnDeleteCustomer"
+    class="btn btn-danger hidden"
+    type="button"
+  >
+    Eliminar cliente
+  </button>
+
+  <button
+    id="btnResetCustomerForm"
+    class="btn btn-ghost"
+    type="button"
+  >
+    Limpiar formulario
+  </button>
+</div>
+
+          <div class="split">
+            <div>
+              <form id="customerForm" class="form" novalidate>
+                <div class="grid2">
+                  <div class="field">
+                    <label for="firstName"
+                      >Nombre <span class="req">*</span></label
+                    >
+                    <input
+                      id="firstName"
+                      type="text"
+                      required
+                      placeholder="Francisco"
+                      autocomplete="off"
+                    />
+                  </div>
+
+                  <div class="field">
+                    <label for="lastName"
+                      >Apellidos <span class="req">*</span></label
+                    >
+                    <input
+                      id="lastName"
+                      type="text"
+                      required
+                      placeholder="García Pérez"
+                      autocomplete="off"
+                    />
+                  </div>
+
+                  <div class="field">
+                    <label for="phone">Teléfono</label>
+                    <input
+                      id="phone"
+                      type="tel"
+                      placeholder="600 000 000"
+                      autocomplete="off"
+                    />
+                  </div>
+
+                  <div class="field">
+                    <label for="address">Dirección</label>
+                    <input
+                      id="address"
+                      type="text"
+                      placeholder="Calle, nº, piso..."
+                      autocomplete="off"
+                    />
+                  </div>
+                </div>
+
+                <div class="row row-spaced">
+                  <label class="check" for="isCompany">
+                    <input id="isCompany" type="checkbox" />
+                    <span>Es empresa</span>
+                  </label>
+                </div>
+
+                <section
+                  id="companyBox"
+                  class="subcard hidden"
+                  aria-labelledby="companyBoxTitle"
+                >
+                  <h3 id="companyBoxTitle">Datos de empresa</h3>
+
+                  <div class="grid2">
+                    <div class="field">
+                      <label for="cif"
+                        >CIF <span class="req">*</span></label
+                      >
+                      <input
+                        id="cif"
+                        type="text"
+                        placeholder="B12345678"
+                        autocomplete="off"
+                      />
+                    </div>
+
+                    <div class="field">
+                      <label for="businessName"
+                        >Razón social <span class="req">*</span></label
+                      >
+                      <input
+                        id="businessName"
+                        type="text"
+                        placeholder="Flopitec Servicios Informáticos S.L."
+                        autocomplete="off"
+                      />
+                    </div>
+
+                    <div class="field">
+                      <label for="companyAddress"
+                        >Dirección <span class="req">*</span></label
+                      >
+                      <input
+                        id="companyAddress"
+                        type="text"
+                        placeholder="Calle, nº..."
+                        autocomplete="off"
+                      />
+                    </div>
+
+                    <div class="field">
+                      <label for="city"
+                        >Ciudad <span class="req">*</span></label
+                      >
+                      <input
+                        id="city"
+                        type="text"
+                        placeholder="Granada"
+                        autocomplete="off"
+                      />
+                    </div>
+
+                    <div class="field">
+                      <label for="province"
+                        >Provincia <span class="req">*</span></label
+                      >
+                      <input
+                        id="province"
+                        type="text"
+                        placeholder="Granada"
+                        autocomplete="off"
+                      />
+                    </div>
+
+                    <div class="field">
+                      <label for="postalCode"
+                        >CP <span class="req">*</span></label
+                      >
+                      <input
+                        id="postalCode"
+                        type="text"
+                        placeholder="18001"
+                        autocomplete="off"
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                <div class="row row-spaced">
+                  <button class="btn btn-primary" type="submit">
+                    Guardar
+                  </button>
+                  <span id="formMsg" class="muted" aria-live="polite"></span>
+                </div>
+              </form>
+            </div>
+
+            <aside class="subcard" aria-labelledby="azCustomersTitle">
+              <div class="panel-head">
+                <div>
+                  <h3 id="azCustomersTitle">Clientes (A–Z)</h3>
+                  <p class="muted small">
+                    Panel lateral para abrir o editar rápidamente.
+                  </p>
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="createPanelQuickFilter">Filtrar</label>
+                <input
+                  id="createPanelQuickFilter"
+                  type="text"
+                  placeholder="Buscar en la lista..."
+                />
+              </div>
+
+              <div id="azCustomersCreate" class="list list-scroll"></div>
+
+              <div id="azCustomersCreateEmpty" class="empty-box hidden">
+                No hay clientes para mostrar.
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <!-- SEARCH -->
+        <section
+          id="panelSearch"
+          class="card panel hidden"
+          aria-labelledby="panelSearchTitle"
+        >
+          <div class="panel-head">
+            <div>
+              <h2 id="panelSearchTitle">Buscar</h2>
+              <p class="muted small">
+                Si no escribes nada, se muestra el listado A–Z.
+              </p>
+            </div>
+
+            <div class="field grow">
+              <label for="searchInput" class="sr-only">Buscar ficha</label>
+              <input
+                id="searchInput"
+                type="text"
+                placeholder="Ej: Francisco · 600 · B123 · Flopitec..."
+              />
+            </div>
+          </div>
+
+          <div class="list-head muted">
+            <span>Resultados</span>
+            <span id="searchCount">0</span>
+          </div>
+
+          <div id="searchList" class="list list-scroll"></div>
+
+          <div id="searchEmpty" class="empty-box hidden">
+            No se han encontrado resultados.
+          </div>
+        </section>
+
+        <!-- COMPANIES -->
+        <section
+          id="panelCompanies"
+          class="card panel hidden"
+          aria-labelledby="panelCompaniesTitle"
+        >
+          <div class="panel-head">
+            <div>
+              <h2 id="panelCompaniesTitle">Empresas</h2>
+              <p class="muted small">
+                Si no filtras, se muestran ordenadas alfabéticamente por razón
+                social.
+              </p>
+            </div>
+
+            <div class="field grow">
+              <label for="companiesFilter" class="sr-only"
+                >Filtrar empresas</label
+              >
+              <input
+                id="companiesFilter"
+                type="text"
+                placeholder="Filtrar por razón social, CIF, ciudad..."
+              />
+            </div>
+          </div>
+
+          <div id="companiesList" class="list list-scroll"></div>
+
+          <div id="companiesEmpty" class="empty-box hidden">
+            No hay empresas para mostrar.
+          </div>
+        </section>
+
+        <!-- DETAIL -->
+        <section
+          id="panelDetail"
+          class="card panel hidden"
+          aria-labelledby="detailTitle"
+        >
+          <div class="panel-head">
+            <div>
+              <h2 id="detailTitle">Ficha</h2>
+              <div id="detailSubtitle" class="muted"></div>
+            </div>
+
+            <div class="row">
+  <button
+    id="btnEditFromDetail"
+    class="btn btn-ghost"
+    type="button"
+  >
+    Editar
+  </button>
+
+  <button
+    id="btnDeleteFromDetail"
+    class="btn btn-danger"
+    type="button"
+  >
+    Eliminar cliente
+  </button>
+
+  <button
+    id="btnBackFromDetail"
+    class="btn btn-ghost"
+    type="button"
+  >
+    Volver
+  </button>
+</div>
+
+          <div class="detail-grid">
+            <div>
+              <div id="detailInfo" class="subcard"></div>
+
+              <section class="subcard" aria-labelledby="attachmentsTitle">
+                <div class="panel-head">
+                  <div>
+                    <h3 id="attachmentsTitle">Adjuntos</h3>
+                    <p class="muted small">Último arriba.</p>
+                  </div>
+
+                  <div class="upload-box">
+                    <input id="fileInput" type="file" class="file" />
+
+                    <div id="selectedFileBox" class="selected-file hidden">
+                      <input
+                        id="selectedFileName"
+                        type="text"
+                        class="selected-file-name"
+                        readonly
+                      />
+                      <button
+                        id="btnClearSelected"
+                        class="icon-btn danger"
+                        type="button"
+                        title="Cancelar archivo"
+                        aria-label="Cancelar archivo"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <button
+                      id="btnUpload"
+                      class="btn btn-primary"
+                      type="button"
+                    >
+                      Subir
+                    </button>
+                  </div>
+                </div>
+
+                <div id="attachmentsList" class="list list-scroll"></div>
+
+                <div id="attachmentsEmpty" class="empty-box hidden">
+                  No hay adjuntos subidos para este cliente.
+                </div>
+              </section>
+            </div>
+
+            <aside class="subcard" aria-labelledby="clientHistoryTitle">
+              <div class="panel-head">
+                <div>
+                  <h3 id="clientHistoryTitle">Histórico del cliente</h3>
+                  <p class="muted small">
+                    Tickets · Facturas · Otros · Nico.
+                  </p>
+                </div>
+
+                <div class="row">
+                  <button
+                    id="btnClientHistoryOpenRegistry"
+                    class="btn btn-ghost"
+                    type="button"
+                  >
+                    Abrir en Registro
+                  </button>
+                </div>
+              </div>
+
+              <div
+                class="tabs tabs-mini"
+                role="tablist"
+                aria-label="Histórico del cliente"
+              >
+                <button
+                  class="tab-btn mini"
+                  data-chtab="ticket"
+                  type="button"
+                  role="tab"
+                >
+                  Tickets
+                </button>
+                <button
+                  class="tab-btn mini"
+                  data-chtab="factura"
+                  type="button"
+                  role="tab"
+                >
+                  Facturas
+                </button>
+                <button
+                  class="tab-btn mini"
+                  data-chtab="otro"
+                  type="button"
+                  role="tab"
+                >
+                  Otros
+                </button>
+                <button
+                  class="tab-btn mini"
+                  data-chtab="nico"
+                  type="button"
+                  role="tab"
+                >
+                  Nico
+                </button>
+              </div>
+
+              <div id="clientHistoryList" class="list list-scroll"></div>
+
+              <div id="clientHistoryEmpty" class="empty-box hidden">
+                Este cliente no tiene registros en esta categoría.
+              </div>
+            </aside>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <footer class="footer muted">
+      <span>Hecho para uso interno de tienda · Datos protegidos con login</span>
+    </footer>
+
+    <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="./config.js"></script>
+<script src="./supabase.js"></script>
+<script src="./utils.js"></script>
+<script src="./app.js"></script>
+  </body>
+</html>
