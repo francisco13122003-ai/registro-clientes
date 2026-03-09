@@ -289,7 +289,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
 
     pendingRecordsList: $("pendingRecordsList"),
     pendingRecordsEmpty: $("pendingRecordsEmpty"),
-    searchTabButtons: [...document.querySelectorAll("[data-searchtab]")],
+    searchTabButtons: [...document.querySelectorAll("#panelSearch [data-searchtab]")],
   };
 
   // =========================================
@@ -354,6 +354,10 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       lastCount: 0,
     },
     authReady: false,
+    txCodeRegistry: {
+      byTxId: new Map(),
+      counters: {},
+    },
   };
 
   // =========================================
@@ -918,6 +922,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     renderHomeStats();
     renderCustomerAzPanel();
     renderSearchResults();
+    setCompanyBoxVisibility();
     renderCompaniesList();
     renderDetailPanel();
     renderClientHistory();
@@ -1159,10 +1164,6 @@ async function saveCustomerForm(event) {
 
     await fetchCustomersAndCompanies();
     renderAllCoreViews();
-
-    if (savedCustomerId) {
-      state.currentDetailCustomerId = savedCustomerId;
-    }
 
     resetCustomerForm({ preservePanel: true });
     setInlineMessage(els.formMsg, "Ficha guardada correctamente.", "success");
@@ -2602,11 +2603,6 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       return "El método de pago no es válido.";
     }
 
-    const statusMeta = collectTxStatusMeta();
-    if (!statusMeta.paidFull && statusMeta.paidAmount <= 0) {
-      return "Si no está pagado completo, debes indicar una cantidad pagada mayor que 0.";
-    }
-
     if (kind === "nico") {
       const nico = collectNicoPayload();
 
@@ -2712,6 +2708,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
         dedupeTransactionsInState();
         renderRegistryList();
+        renderPendingRecords();
         renderHomeStats();
         renderClientHistory();
 
@@ -2777,6 +2774,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
       await fetchTransactionsFull();
       renderRegistryList();
+      renderPendingRecords();
       renderHomeStats();
       renderClientHistory();
       renderAccountingYearOptions();
@@ -2827,6 +2825,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         state.transactionItemsByTxId.delete(id);
 
         renderRegistryList();
+        renderPendingRecords();
         renderHomeStats();
         renderClientHistory();
         renderAccountingYearOptions();
@@ -2847,6 +2846,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
       await fetchTransactionsFull();
       renderRegistryList();
+      renderPendingRecords();
       renderHomeStats();
       renderClientHistory();
       renderAccountingYearOptions();
@@ -2915,6 +2915,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
     await fetchTransactionsFull();
     renderRegistryList();
+    renderPendingRecords();
     renderHomeStats();
     renderClientHistory();
     renderAccountingYearOptions();
@@ -3512,11 +3513,66 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     return { ticket: "TK", factura: "F", otro: "OT", nico: "N" }[kind] || "RG";
   }
 
+  function loadTxCodeRegistry() {
+    try {
+      const raw = localStorage.getItem("txCodeRegistry:v1");
+      const parsed = raw ? JSON.parse(raw) : null;
+      state.txCodeRegistry.byTxId = new Map(Object.entries(parsed?.byTxId || {}));
+      state.txCodeRegistry.counters = parsed?.counters || {};
+    } catch {
+      state.txCodeRegistry.byTxId = new Map();
+      state.txCodeRegistry.counters = {};
+    }
+  }
+
+  function persistTxCodeRegistry() {
+    const payload = {
+      byTxId: Object.fromEntries(state.txCodeRegistry.byTxId.entries()),
+      counters: state.txCodeRegistry.counters,
+    };
+    localStorage.setItem("txCodeRegistry:v1", JSON.stringify(payload));
+  }
+
+  function buildCounterKey(kind, year) {
+    return `${kind || "rg"}-${String(year || "00")}`;
+  }
+
+  function extractSequenceFromCode(code, kind, year) {
+    if (!code) return 0;
+    const prefix = getKindPrefix(kind);
+    const normalizedYear = String(year || "").padStart(2, "0");
+    const match = String(code).match(new RegExp(`^${prefix}-(\\d{5})-${normalizedYear}$`));
+    return match ? Number(match[1]) : 0;
+  }
+
+  function nextCodeFor(kind, year) {
+    const key = buildCounterKey(kind, year);
+    let maxSeen = Number(state.txCodeRegistry.counters[key] || 0);
+
+    for (const tx of state.transactions) {
+      const txYear = String(new Date(tx.tx_date || tx.created_at || Date.now()).getFullYear()).slice(-2);
+      if (tx.kind !== kind || txYear !== String(year)) continue;
+      const knownCode = state.txCodeRegistry.byTxId.get(tx.id) || "";
+      maxSeen = Math.max(maxSeen, extractSequenceFromCode(knownCode, kind, year));
+    }
+
+    const next = maxSeen + 1;
+    state.txCodeRegistry.counters[key] = next;
+    persistTxCodeRegistry();
+    return next;
+  }
+
   function getTransactionCode(tx) {
     const year = String(new Date(tx.tx_date || tx.created_at || Date.now()).getFullYear()).slice(-2);
-    const rows = sortByDateDesc(state.transactions.filter((r) => r.kind === tx.kind), "created_at").reverse();
-    const idx = rows.findIndex((r) => r.id === tx.id) + 1;
-    return `${getKindPrefix(tx.kind)}-${String(Math.max(idx,1)).padStart(5, "0")}-${year}`;
+    if (state.txCodeRegistry.byTxId.has(tx.id)) {
+      return state.txCodeRegistry.byTxId.get(tx.id);
+    }
+
+    const seq = nextCodeFor(tx.kind, year);
+    const code = `${getKindPrefix(tx.kind)}-${String(seq).padStart(5, "0")}-${year}`;
+    state.txCodeRegistry.byTxId.set(tx.id, code);
+    persistTxCodeRegistry();
+    return code;
   }
 
   function attachStatusMeta(comment, meta) {
@@ -3593,17 +3649,22 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     const quarter = Number(els.accountingQuarter?.value || 1);
     const year = Number(state.accounting.year || new Date().getFullYear());
     const kind = state.accounting.kind;
-    const rows = state.transactions.filter((tx)=>tx.kind===kind && new Date(tx.tx_date).getFullYear()===year && getQuarterByMonth(new Date(tx.tx_date).getMonth())===quarter);
+    const rows = state.transactions.filter((tx) => {
+      if (tx.kind !== kind || !tx.tx_date) return false;
+      const parsed = parseISODate(tx.tx_date);
+      return parsed && parsed.getFullYear() === year && getQuarterByMonth(parsed.getMonth()) === quarter;
+    });
     const doc = new jspdf({unit:"pt",format:"a4"});
     let y=40; doc.setFontSize(12); doc.text(`Exportación ${transactionKindLabel(kind)} · T${quarter} ${year}`,40,y); y+=24; doc.setFontSize(9);
     sortByDateDesc(rows,'tx_date').forEach((tx)=>{ if(y>780){doc.addPage(); y=40;} const c=state.customerMap.get(tx.customer_id); const line=`${getTransactionCode(tx)} | ${formatDate(tx.tx_date)} | ${customerDisplayName(c,state.companyMapByCustomerId.get(tx.customer_id)||null)} | ${stripStatusMeta(tx.comments)} | ${euro(tx.total_amount||0)}`; doc.text(line.slice(0,150),40,y); y+=14; });
-    doc.save(`contabilidad-${kind}-T${quarter}-${year}.pdf`);
+    doc.save(`contabilidad-${kind}-T${quarter}-${year}-${Date.now()}.pdf`);
   }
 
   // =========================================
   // FINALIZE INIT
   // =========================================
   bindPart2Events();
+  loadTxCodeRegistry();
   setRegistryKind("ticket");
   setAccountingKind("ticket");
   renderAccountingYearOptions();
