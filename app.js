@@ -167,7 +167,6 @@ const {
     panelAccounting: $("panelAccounting"),
     panelCreate: $("panelCreate"),
     panelSearch: $("panelSearch"),
-    panelCompanies: $("panelCompanies"),
     panelDetail: $("panelDetail"),
 
     // home
@@ -188,7 +187,7 @@ btnDeleteCustomer: $("btnDeleteCustomer"),
     lastName: $("lastName"),
     phone: $("phone"),
     address: $("address"),
-    isCompany: $("isCompany"),
+    createMode: $("createMode"),
 
     companyBox: $("companyBox"),
     cif: $("cif"),
@@ -207,11 +206,6 @@ btnDeleteCustomer: $("btnDeleteCustomer"),
     searchList: $("searchList"),
     searchCount: $("searchCount"),
     searchEmpty: $("searchEmpty"),
-
-    // companies
-    companiesFilter: $("companiesFilter"),
-    companiesList: $("companiesList"),
-    companiesEmpty: $("companiesEmpty"),
 
     // detail
     detailTitle: $("detailTitle"),
@@ -286,6 +280,16 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     accountingQ3: $("accountingQ3"),
     accountingQ4: $("accountingQ4"),
     accountingTabButtons: [...document.querySelectorAll("[data-acctab]")],
+    accountingQuarter: $("accountingQuarter"),
+    btnAccountingExportPdf: $("btnAccountingExportPdf"),
+
+    txPaidFull: $("txPaidFull"),
+    txPaidAmount: $("txPaidAmount"),
+    txDelivered: $("txDelivered"),
+
+    pendingRecordsList: $("pendingRecordsList"),
+    pendingRecordsEmpty: $("pendingRecordsEmpty"),
+    searchTabButtons: [...document.querySelectorAll("[data-searchtab]")],
   };
 
   // =========================================
@@ -322,6 +326,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     currentCustomerId: null,
     currentDetailCustomerId: null,
     currentDetailHistoryKind: "ticket",
+    currentSearchMode: "cliente",
 
     editingCustomerId: null,
 
@@ -360,7 +365,6 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     "accounting",
     "create",
     "search",
-    "companies",
     "detail",
   ];
 
@@ -370,7 +374,6 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     accounting: els.panelAccounting,
     create: els.panelCreate,
     search: els.panelSearch,
-    companies: els.panelCompanies,
     detail: els.panelDetail,
   };
 
@@ -415,8 +418,6 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
 
     if (panelName === "search") {
       renderSearchResults();
-    } else if (panelName === "companies") {
-      renderCompaniesList();
     } else if (panelName === "create") {
       renderCustomerAzPanel();
     } else if (panelName === "home") {
@@ -449,8 +450,6 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
   function afterNavigation(panelName) {
     if (panelName === "search") {
       renderSearchResults();
-    } else if (panelName === "companies") {
-      renderCompaniesList();
     } else if (panelName === "create") {
       renderCustomerAzPanel();
     } else if (panelName === "home") {
@@ -944,6 +943,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
 
     state.editingCustomerId = null;
 
+    if (els.createMode) els.createMode.value = "cliente";
     if (els.companyBox) {
       hide(els.companyBox);
     }
@@ -958,8 +958,8 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
   }
 
   function setCompanyBoxVisibility() {
-    const enabled = !!els.isCompany?.checked;
-    toggle(els.companyBox, enabled);
+    const mode = normalize(els.createMode?.value) || "cliente";
+    toggle(els.companyBox, mode === "empresa");
   }
 
   function fillCustomerForm(customerId) {
@@ -974,7 +974,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     els.lastName.value = customer.last_name || "";
     els.phone.value = customer.phone || "";
     els.address.value = customer.address || "";
-    els.isCompany.checked = !!customer.is_company;
+    if (els.createMode) els.createMode.value = customer.is_company ? "empresa" : "cliente";
 
     setCompanyBoxVisibility();
 
@@ -992,15 +992,16 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
   }
 
   function collectCustomerFormPayload() {
+    const mode = (normalize(els.createMode?.value) || "cliente");
     const customerPayload = {
-      first_name: normalize(els.firstName?.value),
-      last_name: normalize(els.lastName?.value),
+      first_name: mode === "empresa" ? "" : normalize(els.firstName?.value),
+      last_name: mode === "empresa" ? "" : normalize(els.lastName?.value),
       phone: normalize(els.phone?.value),
       address: normalize(els.address?.value),
-      is_company: !!els.isCompany?.checked,
+      is_company: mode === "empresa",
     };
 
-    const companyOn = !!els.isCompany?.checked;
+    const companyOn = mode === "empresa";
 
     const companyPayload = {
       cif: normalize(els.cif?.value),
@@ -1017,11 +1018,11 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
   function validateCustomerForm() {
     const { customerPayload, companyPayload, companyOn } = collectCustomerFormPayload();
 
-    if (!customerPayload.first_name) {
+    if (!companyOn && !customerPayload.first_name) {
       return "El nombre es obligatorio.";
     }
 
-    if (!customerPayload.last_name) {
+    if (!companyOn && !customerPayload.last_name) {
       return "Los apellidos son obligatorios.";
     }
 
@@ -1339,7 +1340,11 @@ async function deleteCurrentCustomer() {
     if (!els.searchList) return;
 
     const query = normalize(els.searchInput?.value);
-    const rows = filterCustomersByText(query).slice(0, SEARCH_LIMIT);
+    const mode = state.currentSearchMode || "cliente";
+    els.searchTabButtons.forEach((btn)=>btn.classList.toggle("is-active", btn.dataset.searchtab===mode));
+    const rows = filterCustomersByText(query)
+      .filter(({customer}) => mode === "empresa" ? customer.is_company : !customer.is_company)
+      .slice(0, SEARCH_LIMIT);
 
     setText(els.searchCount, String(rows.length));
 
@@ -1800,6 +1805,9 @@ async function deleteCurrentCustomer() {
               ? `<span class="pill">${escapeHtml(paymentMethodLabel(tx.payment_method))}</span>`
               : "",
             `<span class="pill success">${escapeHtml(euro(total))}</span>`,
+            `<span class="pill">${escapeHtml(code)}</span>`,
+            `<span class="pill ${statusMeta.paidFull ? "success" : "danger"}">${statusMeta.paidFull ? "Pagado" : "Pago pendiente"}</span>`,
+            `<span class="pill ${statusMeta.delivered ? "success" : "warning"}">${statusMeta.delivered ? "Entregado" : "Sin entregar"}</span>`,
           ]
             .filter(Boolean)
             .join("");
@@ -1857,6 +1865,16 @@ async function deleteCurrentCustomer() {
       return;
     }
 
+    if (target.dataset.openTx) {
+      openEditTransaction(target.dataset.openTx).catch(console.error);
+      return;
+    }
+
+    if (target.dataset.togglePending) {
+      togglePendingField(target.dataset.togglePending, target.dataset.txId).catch(console.error);
+      return;
+    }
+
     if (target.dataset.openRegistryTx) {
       // La apertura exacta del registro se termina en la PARTE 2.
       navigateTo("registry");
@@ -1897,7 +1915,7 @@ async function deleteCurrentCustomer() {
       });
     });
 
-    els.isCompany?.addEventListener("change", setCompanyBoxVisibility);
+    els.createMode?.addEventListener("change", setCompanyBoxVisibility);
     els.customerForm?.addEventListener("submit", saveCustomerForm);
 
     els.btnCancelEdit?.addEventListener("click", () => {
@@ -1922,12 +1940,6 @@ async function deleteCurrentCustomer() {
       }, 180)
     );
 
-    els.companiesFilter?.addEventListener(
-      "input",
-      debounce(() => {
-        renderCompaniesList();
-      }, 180)
-    );
 
     els.btnEditFromDetail?.addEventListener("click", () => {
       if (state.currentDetailCustomerId) {
@@ -2270,6 +2282,10 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     if (els.txDate) els.txDate.value = todayISO();
     if (els.txPayment) els.txPayment.value = "";
     if (els.txComments) els.txComments.value = "";
+    if (els.txPaidFull) els.txPaidFull.checked = false;
+    if (els.txDelivered) els.txDelivered.checked = false;
+    if (els.txPaidAmount) els.txPaidAmount.value = "";
+    updateTxPaidAmountState();
 
     if (els.nicoConcept) els.nicoConcept.value = "";
     if (els.nicoMaterial) els.nicoMaterial.value = "";
@@ -2520,12 +2536,13 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
   function collectTxPayloadFromForm() {
     const kind = state.registry.currentKind;
 
+    const baseComments = normalize(els.txComments?.value);
     const base = {
       kind,
       customer_id: state.registry.selectedCustomerId,
       tx_date: normalize(els.txDate?.value) || todayISO(),
       payment_method: normalize(els.txPayment?.value) || null,
-      comments: normalize(els.txComments?.value),
+      comments: attachStatusMeta(baseComments, collectTxStatusMeta()),
     };
 
     if (kind === "nico") {
@@ -2583,6 +2600,11 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     const paymentMethod = normalize(els.txPayment?.value);
     if (paymentMethod && !PAYMENT_METHODS.includes(paymentMethod)) {
       return "El método de pago no es válido.";
+    }
+
+    const statusMeta = collectTxStatusMeta();
+    if (!statusMeta.paidFull && statusMeta.paidAmount <= 0) {
+      return "Si no está pagado completo, debes indicar una cantidad pagada mayor que 0.";
     }
 
     if (kind === "nico") {
@@ -2990,6 +3012,9 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
               ? clampMoney(tx.amount_paid || tx.total_amount || 0)
               : clampMoney(tx.total_amount || 0);
 
+          const statusMeta = extractStatusMeta(tx.comments);
+          const code = getTransactionCode(tx);
+          const cleanComments = stripStatusMeta(tx.comments);
           const concepts =
             items.length > 0
               ? items
@@ -2997,7 +3022,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
                   .map((item) => item.concept)
                   .filter(Boolean)
                   .join(" · ")
-              : tx.comments || "Sin detalle";
+              : cleanComments || "Sin detalle";
 
           const meta = [
             `<span class="pill primary">${escapeHtml(transactionKindLabel(tx.kind))}</span>`,
@@ -3006,6 +3031,9 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
               ? `<span class="pill">${escapeHtml(paymentMethodLabel(tx.payment_method))}</span>`
               : "",
             `<span class="pill success">${escapeHtml(euro(total))}</span>`,
+            `<span class="pill">${escapeHtml(code)}</span>`,
+            `<span class="pill ${statusMeta.paidFull ? "success" : "danger"}">${statusMeta.paidFull ? "Pagado" : "Pago pendiente"}</span>`,
+            `<span class="pill ${statusMeta.delivered ? "success" : "warning"}">${statusMeta.delivered ? "Entregado" : "Sin entregar"}</span>`,
             txMatchesOpenFromDetail(tx)
               ? `<span class="pill warning">Cliente actual</span>`
               : "",
@@ -3018,17 +3046,14 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
               <div class="list-item-main">
                 <div class="list-item-title">${escapeHtml(customerName)}</div>
                 <div class="list-item-subtitle">${escapeHtml(concepts || "Registro")}</div>
-                <div class="list-item-subtitle">${escapeHtml(tx.comments || "")}</div>
+                <div class="list-item-subtitle">${escapeHtml(cleanComments || "")}</div>
                 <div class="list-item-meta">${meta}</div>
               </div>
 
               <div class="list-item-actions">
-                <button class="btn btn-ghost" type="button" data-edit-tx="${escapeHtml(tx.id)}">
-                  Editar
-                </button>
-                <button class="btn btn-danger" type="button" data-delete-tx="${escapeHtml(tx.id)}">
-                  Eliminar
-                </button>
+                <button class="btn btn-ghost" type="button" data-open-tx="${escapeHtml(tx.id)}">Abrir</button>
+                <button class="btn btn-primary" type="button" data-edit-tx="${escapeHtml(tx.id)}">Editar</button>
+                <button class="btn btn-danger" type="button" data-delete-tx="${escapeHtml(tx.id)}">Eliminar</button>
               </div>
             </article>
           `;
@@ -3057,7 +3082,12 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
     if (els.txDate) els.txDate.value = tx.tx_date || todayISO();
     if (els.txPayment) els.txPayment.value = tx.payment_method || "";
-    if (els.txComments) els.txComments.value = tx.comments || "";
+    const statusMeta = extractStatusMeta(tx.comments);
+    if (els.txComments) els.txComments.value = stripStatusMeta(tx.comments);
+    if (els.txPaidFull) els.txPaidFull.checked = !!statusMeta.paidFull;
+    if (els.txDelivered) els.txDelivered.checked = !!statusMeta.delivered;
+    if (els.txPaidAmount) els.txPaidAmount.value = statusMeta.paidAmount ?? "";
+    updateTxPaidAmountState();
 
     if (tx.kind === "nico") {
       toggle(els.txNicoBox, true);
@@ -3307,8 +3337,6 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
     if (panelName === "search") {
       renderSearchResults();
-    } else if (panelName === "companies") {
-      renderCompaniesList();
     } else if (panelName === "create") {
       renderCustomerAzPanel();
     } else if (panelName === "home") {
@@ -3332,6 +3360,16 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
     const target = event.target.closest("button");
     if (!target) return;
+
+    if (target.dataset.openTx) {
+      openEditTransaction(target.dataset.openTx).catch(console.error);
+      return;
+    }
+
+    if (target.dataset.togglePending) {
+      togglePendingField(target.dataset.togglePending, target.dataset.txId).catch(console.error);
+      return;
+    }
 
     if (target.dataset.openRegistryTx) {
       const txId = target.dataset.openRegistryTx;
@@ -3389,6 +3427,20 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
     els.btnTxDelete?.addEventListener("click", () => {
       deleteTransaction().catch(console.error);
+    });
+    els.txPaidFull?.addEventListener("change", () => {
+      updateTxPaidAmountState();
+    });
+
+    els.btnAccountingExportPdf?.addEventListener("click", () => {
+      exportAccountingQuarterPdf();
+    });
+
+    els.searchTabButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.currentSearchMode = btn.dataset.searchtab || "cliente";
+        renderSearchResults();
+      });
     });
 
     els.registryFilterInput?.addEventListener(
@@ -3451,9 +3503,102 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
   renderAllCoreViews = function patchedRenderAllCoreViews() {
     previousRenderAllCoreViews();
     renderRegistryList();
+    renderPendingRecords();
     renderAccountingYearOptions();
     renderAccountingView();
   };
+
+  function getKindPrefix(kind) {
+    return { ticket: "TK", factura: "F", otro: "OT", nico: "N" }[kind] || "RG";
+  }
+
+  function getTransactionCode(tx) {
+    const year = String(new Date(tx.tx_date || tx.created_at || Date.now()).getFullYear()).slice(-2);
+    const rows = sortByDateDesc(state.transactions.filter((r) => r.kind === tx.kind), "created_at").reverse();
+    const idx = rows.findIndex((r) => r.id === tx.id) + 1;
+    return `${getKindPrefix(tx.kind)}-${String(Math.max(idx,1)).padStart(5, "0")}-${year}`;
+  }
+
+  function attachStatusMeta(comment, meta) {
+    return `${stripStatusMeta(comment)} [[META:${JSON.stringify(meta)}]]`.trim();
+  }
+
+  function stripStatusMeta(comment) {
+    return String(comment || "").replace(/\s*\[\[META:.*\]\]\s*$/,'').trim();
+  }
+
+  function extractStatusMeta(comment) {
+    const text = String(comment || "");
+    const match = text.match(/\[\[META:(.*)\]\]\s*$/);
+    if (!match) return { paidFull: false, delivered: false, paidAmount: 0 };
+    try {
+      const parsed = JSON.parse(match[1]);
+      return { paidFull: !!parsed.paidFull, delivered: !!parsed.delivered, paidAmount: clampMoney(parsed.paidAmount || 0) };
+    } catch {
+      return { paidFull: false, delivered: false, paidAmount: 0 };
+    }
+  }
+
+  function collectTxStatusMeta() {
+    const paidFull = !!els.txPaidFull?.checked;
+    return {
+      paidFull,
+      delivered: !!els.txDelivered?.checked,
+      paidAmount: paidFull ? 0 : clampMoney(els.txPaidAmount?.value),
+    };
+  }
+
+  function updateTxPaidAmountState() {
+    const disabled = !!els.txPaidFull?.checked;
+    setDisabled(els.txPaidAmount, disabled);
+    if (disabled && els.txPaidAmount) els.txPaidAmount.value = "";
+  }
+
+  function getPendingTransactions() {
+    return state.transactions.filter((tx) => {
+      const meta = extractStatusMeta(tx.comments);
+      return !meta.paidFull || !meta.delivered;
+    });
+  }
+
+  function renderPendingRecords() {
+    if (!els.pendingRecordsList) return;
+    const rows = sortByDateDesc(getPendingTransactions(), "tx_date");
+    if (!rows.length) { setHTML(els.pendingRecordsList, ""); show(els.pendingRecordsEmpty); return; }
+    hide(els.pendingRecordsEmpty);
+    setHTML(els.pendingRecordsList, rows.map((tx) => {
+      const customer = state.customerMap.get(tx.customer_id);
+      const company = state.companyMapByCustomerId.get(tx.customer_id) || null;
+      const meta = extractStatusMeta(tx.comments);
+      return `<article class="list-item"><div class="list-item-main"><div class="list-item-title">${escapeHtml(customerDisplayName(customer, company))} · ${escapeHtml(getTransactionCode(tx))}</div><div class="list-item-subtitle">Total: ${escapeHtml(euro(tx.total_amount || 0))} · Pagado: <span style="color:#ff9b9b">${escapeHtml(euro(meta.paidAmount || 0))}</span></div></div><div class="list-item-actions"><button class="btn ${meta.paidFull?"btn-primary":"btn-danger"}" data-toggle-pending="paid" data-tx-id="${escapeHtml(tx.id)}" type="button">Pagado</button><button class="btn ${meta.delivered?"btn-primary":"btn-ghost"}" data-toggle-pending="delivered" data-tx-id="${escapeHtml(tx.id)}" type="button">Entregado</button></div></article>`;
+    }).join(""));
+  }
+
+  async function togglePendingField(field, txId) {
+    const tx = state.transactions.find((r) => r.id === txId); if (!tx) return;
+    const meta = extractStatusMeta(tx.comments);
+    if (field === "paid") meta.paidFull = !meta.paidFull;
+    if (field === "delivered") meta.delivered = !meta.delivered;
+    const payload = { comments: attachStatusMeta(stripStatusMeta(tx.comments), meta) };
+    const { error } = await supabase.from("transactions").update(payload).eq("id", txId);
+    if (error) throw error;
+    tx.comments = payload.comments;
+    renderRegistryList();
+    renderPendingRecords();
+  }
+
+  function exportAccountingQuarterPdf() {
+    const jspdf = window.jspdf?.jsPDF;
+    if (!jspdf) { showToast("No se pudo cargar el generador PDF.", "error"); return; }
+    const quarter = Number(els.accountingQuarter?.value || 1);
+    const year = Number(state.accounting.year || new Date().getFullYear());
+    const kind = state.accounting.kind;
+    const rows = state.transactions.filter((tx)=>tx.kind===kind && new Date(tx.tx_date).getFullYear()===year && getQuarterByMonth(new Date(tx.tx_date).getMonth())===quarter);
+    const doc = new jspdf({unit:"pt",format:"a4"});
+    let y=40; doc.setFontSize(12); doc.text(`Exportación ${transactionKindLabel(kind)} · T${quarter} ${year}`,40,y); y+=24; doc.setFontSize(9);
+    sortByDateDesc(rows,'tx_date').forEach((tx)=>{ if(y>780){doc.addPage(); y=40;} const c=state.customerMap.get(tx.customer_id); const line=`${getTransactionCode(tx)} | ${formatDate(tx.tx_date)} | ${customerDisplayName(c,state.companyMapByCustomerId.get(tx.customer_id)||null)} | ${stripStatusMeta(tx.comments)} | ${euro(tx.total_amount||0)}`; doc.text(line.slice(0,150),40,y); y+=14; });
+    doc.save(`contabilidad-${kind}-T${quarter}-${year}.pdf`);
+  }
 
   // =========================================
   // FINALIZE INIT
