@@ -151,10 +151,7 @@
             Crear ficha
           </button>
           <button class="nav-btn" data-nav="search" type="button">
-            Buscar
-          </button>
-          <button class="nav-btn" data-nav="companies" type="button">
-            Empresas
+            Buscar ficha
           </button>
         </nav>
 
@@ -212,11 +209,11 @@
               </div>
             </button>
 
-            <button class="tile" data-nav="companies" type="button">
-              <span class="tile-badge">Empresas</span>
-              <div class="tile-title">Listado empresarial</div>
+            <button class="tile" data-nav="search" type="button">
+              <span class="tile-badge">Fichas</span>
+              <div class="tile-title">Clientes y empresas</div>
               <div class="tile-subtitle">
-                Clientes marcados como empresa
+                Búsqueda unificada y listado A–Z
               </div>
             </button>
           </div>
@@ -242,6 +239,18 @@
               <strong id="homeOfflineCount" class="dashboard-value">—</strong>
             </div>
           </div>
+
+
+          <section class="subcard" aria-labelledby="pendingTitle">
+            <div class="panel-head">
+              <div>
+                <h3 id="pendingTitle">Registros pendientes</h3>
+                <p class="muted small">Pendientes de pago y/o entrega con acciones rápidas.</p>
+              </div>
+            </div>
+            <div id="pendingRecordsList" class="list"></div>
+            <div id="pendingRecordsEmpty" class="empty-box hidden">No hay pendientes para mostrar.</div>
+          </section>
         </section>
 
         <!-- REGISTRY -->
@@ -549,6 +558,20 @@
               </div>
             </section>
 
+
+            <section class="subcard subcard-tight">
+              <div class="grid2">
+                <div class="field">
+                  <label class="check" for="txPaidFull"><input id="txPaidFull" type="checkbox" /> <span>Pagado completo</span></label>
+                  <label for="txPaidAmount">Cantidad pagada (€)</label>
+                  <input id="txPaidAmount" type="number" step="0.01" inputmode="decimal" placeholder="0.00" />
+                </div>
+                <div class="field">
+                  <label class="check" for="txDelivered"><input id="txDelivered" type="checkbox" /> <span>Entregado</span></label>
+                </div>
+              </div>
+            </section>
+
             <div class="field">
               <label for="txComments">Comentarios</label>
               <textarea
@@ -579,6 +602,11 @@
               <span id="txMsg" class="muted" aria-live="polite"></span>
             </div>
           </section>
+
+          <div class="tabs" role="tablist" aria-label="Tipo de ficha en búsqueda">
+            <button class="tab-btn" data-searchtab="cliente" type="button">Clientes</button>
+            <button class="tab-btn" data-searchtab="empresa" type="button">Empresas</button>
+          </div>
 
           <div class="list-head muted">
             <span>Listado</span>
@@ -654,6 +682,25 @@
             >
               Nico
             </button>
+          </div>
+
+
+          <div class="subcard">
+            <div class="grid2 grid2-compact">
+              <div class="field">
+                <label for="accountingQuarter">Trimestre</label>
+                <select id="accountingQuarter" class="select">
+                  <option value="1">1º trimestre</option>
+                  <option value="2">2º trimestre</option>
+                  <option value="3">3er trimestre</option>
+                  <option value="4">4º trimestre</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="btnAccountingExportPdf">Exportar PDF de tipo actual</label>
+                <button id="btnAccountingExportPdf" class="btn btn-primary" type="button">Descargar PDF trimestral</button>
+              </div>
+            </div>
           </div>
 
           <div class="subcard accounting-summary">
@@ -815,10 +862,13 @@
                 </div>
 
                 <div class="row row-spaced">
-                  <label class="check" for="isCompany">
-                    <input id="isCompany" type="checkbox" />
-                    <span>Es empresa</span>
-                  </label>
+                  <div class="field">
+                    <label for="createMode">Tipo de ficha</label>
+                    <select id="createMode" class="select">
+                      <option value="cliente">Cliente</option>
+                      <option value="empresa">Empresa</option>
+                    </select>
+                  </div>
                 </div>
 
                 <section
@@ -948,7 +998,7 @@
         >
           <div class="panel-head">
             <div>
-              <h2 id="panelSearchTitle">Buscar</h2>
+              <h2 id="panelSearchTitle">Buscar ficha</h2>
               <p class="muted small">
                 Si no escribes nada, se muestra el listado A–Z.
               </p>
@@ -964,6 +1014,11 @@
             </div>
           </div>
 
+          <div class="tabs" role="tablist" aria-label="Tipo de ficha en búsqueda">
+            <button class="tab-btn" data-searchtab="cliente" type="button">Clientes</button>
+            <button class="tab-btn" data-searchtab="empresa" type="button">Empresas</button>
+          </div>
+
           <div class="list-head muted">
             <span>Resultados</span>
             <span id="searchCount">0</span>
@@ -973,40 +1028,6 @@
 
           <div id="searchEmpty" class="empty-box hidden">
             No se han encontrado resultados.
-          </div>
-        </section>
-
-        <!-- COMPANIES -->
-        <section
-          id="panelCompanies"
-          class="card panel hidden"
-          aria-labelledby="panelCompaniesTitle"
-        >
-          <div class="panel-head">
-            <div>
-              <h2 id="panelCompaniesTitle">Empresas</h2>
-              <p class="muted small">
-                Si no filtras, se muestran ordenadas alfabéticamente por razón
-                social.
-              </p>
-            </div>
-
-            <div class="field grow">
-              <label for="companiesFilter" class="sr-only"
-                >Filtrar empresas</label
-              >
-              <input
-                id="companiesFilter"
-                type="text"
-                placeholder="Filtrar por razón social, CIF, ciudad..."
-              />
-            </div>
-          </div>
-
-          <div id="companiesList" class="list list-scroll"></div>
-
-          <div id="companiesEmpty" class="empty-box hidden">
-            No hay empresas para mostrar.
           </div>
         </section>
 
@@ -1176,6 +1197,7 @@
 <script src="./config.js"></script>
 <script src="./supabase.js"></script>
 <script src="./utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="./app.js"></script>
   </body>
 </html>
