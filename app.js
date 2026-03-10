@@ -3347,6 +3347,13 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     const target = event.target.closest("button");
     if (!target) return;
 
+    const pendingField = target.dataset.togglePending;
+    const pendingTxId = target.dataset.txId;
+    if (pendingField && pendingTxId) {
+      togglePendingField(pendingField, pendingTxId).catch(console.error);
+      return;
+    }
+
     if (target.dataset.openRegistryTx) {
       const txId = target.dataset.openRegistryTx;
       state.registry.openFromDetailCustomerId = state.currentDetailCustomerId || null;
@@ -3611,11 +3618,19 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       meta.paidFull = true;
       meta.paidAmount = 0;
     }
-    if (field === "delivered") meta.delivered = !meta.delivered;
+    if (field === "delivered") meta.delivered = true;
     const payload = { comments: attachStatusMeta(stripStatusMeta(tx.comments), meta) };
     const { error } = await supabase.from("transactions").update(payload).eq("id", txId);
     if (error) throw error;
     tx.comments = payload.comments;
+
+    if (state.registry.editingTxId === txId) {
+      if (els.txPaidFull) els.txPaidFull.checked = !!meta.paidFull;
+      if (els.txDelivered) els.txDelivered.checked = !!meta.delivered;
+      if (els.txPaidAmount) els.txPaidAmount.value = meta.paidFull ? "" : meta.paidAmount;
+      updateTxPaidAmountState();
+    }
+
     renderRegistryList();
     renderPendingRecords();
   }
