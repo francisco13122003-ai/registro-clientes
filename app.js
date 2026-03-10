@@ -3270,6 +3270,12 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       const button = event.target.closest("button");
       if (!button) return;
 
+      const openTxId = button.dataset.openTx;
+      if (openTxId) {
+        openEditTransaction(openTxId).catch(console.error);
+        return;
+      }
+
       const editTxId = button.dataset.editTx;
       if (editTxId) {
         openEditTransaction(editTxId).catch(console.error);
