@@ -3077,7 +3077,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
                 <div class="list-item-meta">${meta}</div>
               </div>
 
-              <div class="list-item-actions">
+              <div class="list-item-actions registry-item-actions">
                 <button class="btn btn-ghost" type="button" data-open-tx="${escapeHtml(tx.id)}">Abrir</button>
                 <button class="btn btn-primary" type="button" data-edit-tx="${escapeHtml(tx.id)}">Editar</button>
                 <button class="btn btn-danger" type="button" data-delete-tx="${escapeHtml(tx.id)}">Eliminar</button>

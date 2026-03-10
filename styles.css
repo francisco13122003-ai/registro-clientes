@@ -819,6 +819,18 @@ input[type="checkbox"] {
   flex-shrink: 0;
 }
 
+.registry-item-actions {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.registry-item-actions .btn {
+  min-width: 78px;
+}
+
 .pending-record-item {
   padding: 11px 12px;
   gap: 10px;
@@ -1211,6 +1223,10 @@ input[type="checkbox"] {
     flex-wrap: wrap;
   }
 
+  .registry-item-actions {
+    justify-content: flex-start;
+  }
+
   .upload-box,
   .selected-file {
     width: 100%;
@@ -1240,6 +1256,11 @@ input[type="checkbox"] {
   .btn,
   .tab-btn {
     width: 100%;
+  }
+
+  .registry-item-actions .btn {
+    width: auto;
+    flex: 1 1 96px;
   }
 
   .session-area,
