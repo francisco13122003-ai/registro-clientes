@@ -819,6 +819,32 @@ input[type="checkbox"] {
   flex-shrink: 0;
 }
 
+.pending-record-item {
+  padding: 11px 12px;
+  gap: 10px;
+}
+
+.pending-record-item .list-item-title {
+  font-size: 0.94rem;
+}
+
+.pending-record-item .list-item-subtitle {
+  margin-top: 4px;
+  font-size: 0.82rem;
+  line-height: 1.3;
+}
+
+.pending-actions {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.pending-actions .btn {
+  min-height: 36px;
+  padding: 8px 12px;
+}
+
 .empty-box {
   margin-top: 14px;
   padding: 18px;
