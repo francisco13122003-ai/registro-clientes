@@ -268,7 +268,6 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     nicoTotal: $("nicoTotal"),
     nicoForNico: $("nicoForNico"),
     nicoForFlopitec: $("nicoForFlopitec"),
-    nicoPaid: $("nicoPaid"),
     nicoNotes: $("nicoNotes"),
 
     accountingYear: $("accountingYear"),
@@ -1796,7 +1795,7 @@ async function deleteCurrentCustomer() {
         .map((tx) => {
           const total =
             tx.kind === "nico"
-              ? clampMoney(tx.amount_paid || tx.total_amount || 0)
+              ? clampMoney(tx.total_amount || 0)
               : clampMoney(tx.total_amount || 0);
 
           const meta = [
@@ -1863,16 +1862,6 @@ async function deleteCurrentCustomer() {
     const deleteAttachmentId = target.dataset.deleteAttachment;
     if (deleteAttachmentId) {
       deleteAttachment(deleteAttachmentId).catch(console.error);
-      return;
-    }
-
-    if (target.dataset.openTx) {
-      openEditTransaction(target.dataset.openTx).catch(console.error);
-      return;
-    }
-
-    if (target.dataset.togglePending) {
-      togglePendingField(target.dataset.togglePending, target.dataset.txId).catch(console.error);
       return;
     }
 
@@ -2156,7 +2145,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     const isNico = state.registry.currentKind === "nico";
 
     if (isNico) {
-      setText(els.txTotal, euro(clampMoney(els.nicoPaid?.value || 0)));
+      setText(els.txTotal, euro(clampMoney(els.nicoTotal?.value || 0)));
       hide(els.txItemsEmpty);
       setHTML(els.txItems, "");
       return;
@@ -2293,7 +2282,6 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     if (els.nicoTotal) els.nicoTotal.value = "";
     if (els.nicoForNico) els.nicoForNico.value = "";
     if (els.nicoForFlopitec) els.nicoForFlopitec.value = "";
-    if (els.nicoPaid) els.nicoPaid.value = "";
     if (els.nicoNotes) els.nicoNotes.value = "";
 
     setSelectedTxCustomer(null);
@@ -2366,7 +2354,6 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
             clampMoney(tx.material_cost),
             clampMoney(tx.nico_amount),
             clampMoney(tx.flopitec_amount),
-            clampMoney(tx.amount_paid),
           ].join("|")
         : "";
 
@@ -2529,7 +2516,6 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       total_amount: clampMoney(els.nicoTotal?.value),
       nico_amount: clampMoney(els.nicoForNico?.value),
       flopitec_amount: clampMoney(els.nicoForFlopitec?.value),
-      amount_paid: clampMoney(els.nicoPaid?.value),
       notes: normalize(els.nicoNotes?.value),
     };
   }
@@ -2556,7 +2542,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
           material_cost: clampMoney(nico.material_cost),
           nico_amount: clampMoney(nico.nico_amount),
           flopitec_amount: clampMoney(nico.flopitec_amount),
-          amount_paid: clampMoney(nico.amount_paid),
+          amount_paid: null,
         },
         itemsPayload: nico.concept
           ? [
@@ -2614,7 +2600,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         return "El importe total de Nico debe ser mayor que 0.";
       }
 
-      if (nico.amount_paid < 0 || nico.material_cost < 0 || nico.nico_amount < 0 || nico.flopitec_amount < 0) {
+      if (nico.material_cost < 0 || nico.nico_amount < 0 || nico.flopitec_amount < 0) {
         return "Los importes de Nico no pueden ser negativos.";
       }
 
@@ -2985,7 +2971,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     const visibleSum = rows.reduce((sum, tx) => {
       const amount =
         tx.kind === "nico"
-          ? clampMoney(tx.amount_paid || tx.total_amount || 0)
+          ? clampMoney(tx.total_amount || 0)
           : clampMoney(tx.total_amount || 0);
       return sum + amount;
     }, 0);
@@ -3010,7 +2996,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
           const customerName = customerDisplayName(customer, company);
           const total =
             tx.kind === "nico"
-              ? clampMoney(tx.amount_paid || tx.total_amount || 0)
+              ? clampMoney(tx.total_amount || 0)
               : clampMoney(tx.total_amount || 0);
 
           const statusMeta = extractStatusMeta(tx.comments);
@@ -3100,7 +3086,6 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       if (els.nicoTotal) els.nicoTotal.value = tx.total_amount ?? "";
       if (els.nicoForNico) els.nicoForNico.value = tx.nico_amount ?? "";
       if (els.nicoForFlopitec) els.nicoForFlopitec.value = tx.flopitec_amount ?? "";
-      if (els.nicoPaid) els.nicoPaid.value = tx.amount_paid ?? "";
       if (els.nicoNotes) els.nicoNotes.value = "";
     } else {
       toggle(els.txNicoBox, false);
@@ -3196,7 +3181,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       const monthTotal = txs.reduce((sum, tx) => {
         const amount =
           kind === "nico"
-            ? clampMoney(tx.amount_paid || tx.total_amount || 0)
+            ? clampMoney(tx.total_amount || 0)
             : clampMoney(tx.total_amount || 0);
         return sum + amount;
       }, 0);
@@ -3362,16 +3347,6 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     const target = event.target.closest("button");
     if (!target) return;
 
-    if (target.dataset.openTx) {
-      openEditTransaction(target.dataset.openTx).catch(console.error);
-      return;
-    }
-
-    if (target.dataset.togglePending) {
-      togglePendingField(target.dataset.togglePending, target.dataset.txId).catch(console.error);
-      return;
-    }
-
     if (target.dataset.openRegistryTx) {
       const txId = target.dataset.openRegistryTx;
       state.registry.openFromDetailCustomerId = state.currentDetailCustomerId || null;
@@ -3464,11 +3439,10 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       els.nicoTotal,
       els.nicoForNico,
       els.nicoForFlopitec,
-      els.nicoPaid,
     ].forEach((input) => {
       input?.addEventListener("input", () => {
         if (state.registry.currentKind === "nico") {
-          setText(els.txTotal, euro(clampMoney(els.nicoPaid?.value || 0)));
+          setText(els.txTotal, euro(clampMoney(els.nicoTotal?.value || 0)));
         }
       });
     });
@@ -3510,7 +3484,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
   };
 
   function getKindPrefix(kind) {
-    return { ticket: "TK", factura: "F", otro: "OT", nico: "N" }[kind] || "RG";
+    return { ticket: "TK", factura: "FC", otro: "OT", nico: "NC" }[kind] || "RG";
   }
 
   function loadTxCodeRegistry() {
@@ -3626,14 +3600,17 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       const customer = state.customerMap.get(tx.customer_id);
       const company = state.companyMapByCustomerId.get(tx.customer_id) || null;
       const meta = extractStatusMeta(tx.comments);
-      return `<article class="list-item"><div class="list-item-main"><div class="list-item-title">${escapeHtml(customerDisplayName(customer, company))} · ${escapeHtml(getTransactionCode(tx))}</div><div class="list-item-subtitle">Total: ${escapeHtml(euro(tx.total_amount || 0))} · Pagado: <span style="color:#ff9b9b">${escapeHtml(euro(meta.paidAmount || 0))}</span></div></div><div class="list-item-actions"><button class="btn ${meta.paidFull?"btn-primary":"btn-danger"}" data-toggle-pending="paid" data-tx-id="${escapeHtml(tx.id)}" type="button">Pagado</button><button class="btn ${meta.delivered?"btn-primary":"btn-ghost"}" data-toggle-pending="delivered" data-tx-id="${escapeHtml(tx.id)}" type="button">Entregado</button></div></article>`;
+      return `<article class="list-item pending-record-item"><div class="list-item-main"><div class="list-item-title">${escapeHtml(customerDisplayName(customer, company))} · ${escapeHtml(getTransactionCode(tx))}</div><div class="list-item-subtitle">Total: ${escapeHtml(euro(tx.total_amount || 0))} · Pagado: <span style="color:#ff9b9b">${escapeHtml(euro(meta.paidAmount || 0))}</span></div></div><div class="list-item-actions pending-actions"><button class="btn ${meta.paidFull?"btn-primary":"btn-danger"}" data-toggle-pending="paid" data-tx-id="${escapeHtml(tx.id)}" type="button">Pagado</button><button class="btn ${meta.delivered?"btn-primary":"btn-ghost"}" data-toggle-pending="delivered" data-tx-id="${escapeHtml(tx.id)}" type="button">Entregado</button></div></article>`;
     }).join(""));
   }
 
   async function togglePendingField(field, txId) {
     const tx = state.transactions.find((r) => r.id === txId); if (!tx) return;
     const meta = extractStatusMeta(tx.comments);
-    if (field === "paid") meta.paidFull = !meta.paidFull;
+    if (field === "paid") {
+      meta.paidFull = true;
+      meta.paidAmount = 0;
+    }
     if (field === "delivered") meta.delivered = !meta.delivered;
     const payload = { comments: attachStatusMeta(stripStatusMeta(tx.comments), meta) };
     const { error } = await supabase.from("transactions").update(payload).eq("id", txId);
