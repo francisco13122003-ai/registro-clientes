@@ -1793,10 +1793,24 @@ async function deleteCurrentCustomer() {
       els.clientHistoryList,
       rows
         .map((tx) => {
+          const statusMeta = extractStatusMeta(tx.comments);
+          const code = getTransactionCode(tx);
+          const cleanComments = stripStatusMeta(tx.comments);
+          const items = state.transactionItemsByTxId.get(tx.id) || [];
+
           const total =
             tx.kind === "nico"
               ? clampMoney(tx.total_amount || 0)
               : clampMoney(tx.total_amount || 0);
+
+          const concepts =
+            items.length > 0
+              ? items
+                  .slice(0, 3)
+                  .map((item) => item.concept)
+                  .filter(Boolean)
+                  .join(" · ")
+              : cleanComments || "Registro";
 
           const meta = [
             `<span class="pill primary">${escapeHtml(transactionKindLabel(tx.kind))}</span>`,
@@ -1815,9 +1829,13 @@ async function deleteCurrentCustomer() {
           return `
             <article class="list-item">
               <div class="list-item-main">
-                <div class="list-item-title">${escapeHtml(tx.comments || "Registro")}</div>
+                <div class="list-item-title">${escapeHtml(concepts)}</div>
                 <div class="list-item-subtitle">
-                  ${escapeHtml(tx.kind === "nico" ? (tx.comments || tx.nico_amount || "Nico") : "Venta / reparación")}
+                  ${escapeHtml(
+                    tx.kind === "nico"
+                      ? cleanComments || "Registro tipo Nico"
+                      : cleanComments || "Venta / reparación"
+                  )}
                 </div>
                 <div class="list-item-meta">${meta}</div>
               </div>
