@@ -3672,7 +3672,17 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     });
     const doc = new jspdf({unit:"pt",format:"a4"});
     let y=40; doc.setFontSize(12); doc.text(`Exportación ${transactionKindLabel(kind)} · T${quarter} ${year}`,40,y); y+=24; doc.setFontSize(9);
-    sortByDateDesc(rows,'tx_date').forEach((tx)=>{ if(y>780){doc.addPage(); y=40;} const c=state.customerMap.get(tx.customer_id); const line=`${getTransactionCode(tx)} | ${formatDate(tx.tx_date)} | ${customerDisplayName(c,state.companyMapByCustomerId.get(tx.customer_id)||null)} | ${stripStatusMeta(tx.comments)} | ${euro(tx.total_amount||0)}`; doc.text(line.slice(0,150),40,y); y+=14; });
+    sortByDateDesc(rows,'tx_date').forEach((tx)=>{
+      if(y>780){doc.addPage(); y=40;}
+      const c=state.customerMap.get(tx.customer_id);
+      const concepts = (state.transactionItemsByTxId.get(tx.id) || [])
+        .map((item) => normalize(item.concept))
+        .filter(Boolean)
+        .join(" · ");
+      const line=`${getTransactionCode(tx)} | ${formatDate(tx.tx_date)} | ${customerDisplayName(c,state.companyMapByCustomerId.get(tx.customer_id)||null)} | ${concepts || "Sin concepto"} | ${euro(tx.total_amount||0)}`;
+      doc.text(line.slice(0,150),40,y);
+      y+=14;
+    });
     doc.save(`contabilidad-${kind}-T${quarter}-${year}-${Date.now()}.pdf`);
   }
 
