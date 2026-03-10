@@ -2394,6 +2394,25 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     state.transactions = uniqueBy(uniqueTx, (tx) => tx.id);
   }
 
+  function getTransactionConceptText(tx) {
+    const items = state.transactionItemsByTxId.get(tx.id) || [];
+    return items
+      .map((item) => normalize(item.concept))
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  function compareTransactionsByCodeAsc(a, b, codeByTxId = new Map()) {
+    const codeA = codeByTxId.get(a.id) || getTransactionCode(a);
+    const codeB = codeByTxId.get(b.id) || getTransactionCode(b);
+
+    const seqA = Number(String(codeA).match(/^[A-Z]{2}-(\d{5})-\d{2}$/)?.[1] || 0);
+    const seqB = Number(String(codeB).match(/^[A-Z]{2}-(\d{5})-\d{2}$/)?.[1] || 0);
+
+    if (seqA !== seqB) return seqA - seqB;
+    return String(codeA).localeCompare(String(codeB));
+  }
+
   // =========================================
   // FETCH REGISTRY DATA
   // =========================================
@@ -2429,7 +2448,10 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       const itemsMap = new Map();
       for (const item of uniqueBy(safeArray(itemsData), (row) => row.id)) {
         const list = itemsMap.get(item.transaction_id) || [];
-        list.push(item);
+        list.push({
+          ...item,
+          concept: normalize(item.concept),
+        });
         itemsMap.set(item.transaction_id, list);
       }
       state.transactionItemsByTxId = itemsMap;
@@ -3670,18 +3692,24 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       const parsed = parseISODate(tx.tx_date);
       return parsed && parsed.getFullYear() === year && getQuarterByMonth(parsed.getMonth()) === quarter;
     });
+    const codeByTxId = new Map();
+    [...rows]
+      .sort((a, b) => String(a.tx_date || a.created_at || "").localeCompare(String(b.tx_date || b.created_at || "")))
+      .forEach((tx) => {
+        codeByTxId.set(tx.id, getTransactionCode(tx));
+      });
+
     const doc = new jspdf({unit:"pt",format:"a4"});
     let y=40; doc.setFontSize(12); doc.text(`Exportación ${transactionKindLabel(kind)} · T${quarter} ${year}`,40,y); y+=24; doc.setFontSize(9);
-    sortByDateDesc(rows,'tx_date').forEach((tx)=>{
-      if(y>780){doc.addPage(); y=40;}
+    [...rows].sort((a, b) => compareTransactionsByCodeAsc(a, b, codeByTxId)).forEach((tx)=>{
+      if(y>760){doc.addPage(); y=40;}
       const c=state.customerMap.get(tx.customer_id);
-      const concepts = (state.transactionItemsByTxId.get(tx.id) || [])
-        .map((item) => normalize(item.concept))
-        .filter(Boolean)
-        .join(" · ");
-      const line=`${getTransactionCode(tx)} | ${formatDate(tx.tx_date)} | ${customerDisplayName(c,state.companyMapByCustomerId.get(tx.customer_id)||null)} | ${concepts || "Sin concepto"} | ${euro(tx.total_amount||0)}`;
-      doc.text(line.slice(0,150),40,y);
-      y+=14;
+      const customerName = customerDisplayName(c,state.companyMapByCustomerId.get(tx.customer_id)||null);
+      const concepts = getTransactionConceptText(tx) || "Sin concepto";
+      const line = `${codeByTxId.get(tx.id) || getTransactionCode(tx)} | ${formatDate(tx.tx_date)} | ${customerName} | Concepto: ${concepts} | ${euro(tx.total_amount||0)}`;
+      const wrappedLines = doc.splitTextToSize(line, 520);
+      doc.text(wrappedLines,40,y);
+      y += (wrappedLines.length * 12) + 6;
     });
     doc.save(`contabilidad-${kind}-T${quarter}-${year}-${Date.now()}.pdf`);
   }
