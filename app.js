@@ -2636,12 +2636,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         return "El concepto de Nico es obligatorio.";
       }
 
-      if (nico.total_amount === 0) {
-        return "El importe total de Nico no puede ser 0.";
-      }
 
-      return "";
-    }
 
     const items = getDraftItemsSanitized();
 
@@ -2651,8 +2646,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
     const hasInvalid = items.some((item) => !item.concept || clampMoney(item.amount) === 0);
     if (hasInvalid) {
-      return "Cada línea debe tener concepto e importe distinto de 0.";
-    }
+
 
     return "";
   }
