@@ -2636,10 +2636,6 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         return "El concepto de Nico es obligatorio.";
       }
 
-      if (nico.total_amount === 0) {
-        return "El importe total de Nico no puede ser 0 (puede ser negativo).";
-      }
-
       return "";
     }
 
