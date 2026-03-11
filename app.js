@@ -1028,8 +1028,8 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
         reason,
       });
 
-      const isFullReturn = clampMoney(currentTotal - returnAmount) === 0;
-      const nextTotal = isFullReturn ? 0 : clampMoney(currentTotal - returnAmount);
+      const isFullReturn = returnAmount >= currentTotal;
+      const nextTotal = Math.max(clampMoney(currentTotal - returnAmount), 0);
 
       const currentMeta = extractStatusMeta(tx.comments);
       const nextComments = buildCommentWithMeta(stripStatusMeta(tx.comments), {
@@ -1075,6 +1075,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       renderPendingRecords();
       renderHomeStats();
       renderAccountingView();
+      renderClientHistory();
 
       closeReturnForm();
       showToast("Devolución registrada correctamente.", "success");
@@ -3273,7 +3274,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
             `<span class="pill ${statusMeta.paidFull ? "success" : "danger"}">${statusMeta.paidFull ? "Pagado" : "Pago pendiente"}</span>`,
             `<span class="pill ${statusMeta.delivered ? "success" : "warning"}">${statusMeta.delivered ? "Entregado" : "Sin entregar"}</span>`,
             hasReturn
-              ? `<span class="pill warning">Devolución registrada: ${escapeHtml(euro(refundedAmount))}</span>`
+              ? `<span class="pill warning">Devolución registrada: -${escapeHtml(euro(refundedAmount))}</span>`
               : "",
             txMatchesOpenFromDetail(tx)
               ? `<span class="pill warning">Cliente actual</span>`
