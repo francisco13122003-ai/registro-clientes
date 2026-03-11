@@ -2150,7 +2150,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         concept: normalize(item.concept),
         amount: clampMoney(item.amount),
       }))
-      .filter((item) => item.concept || item.amount > 0);
+      .filter((item) => item.concept || item.amount !== 0);
   }
 
   function getDraftItemsTotal() {
@@ -2636,12 +2636,8 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         return "El concepto de Nico es obligatorio.";
       }
 
-      if (nico.total_amount <= 0) {
-        return "El importe total de Nico debe ser mayor que 0.";
-      }
-
-      if (nico.material_cost < 0 || nico.nico_amount < 0 || nico.flopitec_amount < 0) {
-        return "Los importes de Nico no pueden ser negativos.";
+      if (nico.total_amount === 0) {
+        return "El importe total de Nico no puede ser 0.";
       }
 
       return "";
@@ -2653,9 +2649,9 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       return "Debes añadir al menos una línea con concepto e importe.";
     }
 
-    const hasInvalid = items.some((item) => !item.concept || clampMoney(item.amount) <= 0);
+    const hasInvalid = items.some((item) => !item.concept || clampMoney(item.amount) === 0);
     if (hasInvalid) {
-      return "Cada línea debe tener concepto e importe mayor que 0.";
+      return "Cada línea debe tener concepto e importe distinto de 0.";
     }
 
     return "";
