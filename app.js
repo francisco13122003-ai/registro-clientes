@@ -916,8 +916,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
         supabase
           .from("devoluciones")
           .select("*")
-          .order("fecha_devolucion", { ascending: false })
-          .order("created_at", { ascending: false }),
+          .order("fecha_devolucion", { ascending: false }),
         15000
       );
 
@@ -1035,14 +1034,14 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       const currentMeta = extractStatusMeta(tx.comments);
       const nextComments = buildCommentWithMeta(stripStatusMeta(tx.comments), {
         ...currentMeta,
-        paidFull: isFullReturn ? false : true,
+        paidFull: isFullReturn ? true : false,
       });
 
       let { error: txUpdateError } = await supabase
         .from("transactions")
         .update({
           total_amount: nextTotal,
-          paidFull: isFullReturn ? false : true,
+          paidFull: isFullReturn ? true : false,
           comments: nextComments,
         })
         .eq("id", transactionId);
@@ -2635,8 +2634,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
           supabase
             .from("devoluciones")
             .select("*")
-            .order("fecha_devolucion", { ascending: false })
-            .order("created_at", { ascending: false }),
+            .order("fecha_devolucion", { ascending: false }),
           18000
         ),
       ]);
