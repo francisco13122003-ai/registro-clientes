@@ -1798,10 +1798,7 @@ async function deleteCurrentCustomer() {
           const cleanComments = stripStatusMeta(tx.comments);
           const items = state.transactionItemsByTxId.get(tx.id) || [];
 
-          const total =
-            tx.kind === "nico"
-              ? clampMoney(tx.total_amount || 0)
-              : clampMoney(tx.total_amount || 0);
+          const total = getTransactionSignedTotal(tx, items);
 
           const concepts =
             items.length > 0
@@ -2356,7 +2353,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       tx.kind,
       tx.customer_id,
       tx.tx_date,
-      clampMoney(tx.total_amount),
+      getTransactionSignedTotal(tx, items),
       normalizeLower(tx.payment_method),
       normalizeLower(tx.comments),
     ].join("|");
@@ -2400,6 +2397,14 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       .map((item) => normalize(item.concept))
       .filter(Boolean)
       .join(" · ");
+  }
+
+  function getTransactionSignedTotal(tx, itemsArg = null) {
+    const items = itemsArg || state.transactionItemsByTxId.get(tx.id) || [];
+    if (items.length) {
+      return clampMoney(items.reduce((sum, item) => sum + clampMoney(item.amount), 0));
+    }
+    return clampMoney(tx.total_amount || 0);
   }
 
   function compareTransactionsByCodeAsc(a, b, codeByTxId = new Map()) {
@@ -2578,7 +2583,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         txPayload: {
           ...base,
           comments: [base.comments, nico.notes].filter(Boolean).join(" · "),
-          total_amount: clampMoney(nico.total_amount),
+          total_amount: Math.abs(clampMoney(nico.total_amount)),
           material_cost: clampMoney(nico.material_cost),
           nico_amount: clampMoney(nico.nico_amount),
           flopitec_amount: clampMoney(nico.flopitec_amount),
@@ -2600,8 +2605,8 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     return {
       txPayload: {
         ...base,
-        total_amount: clampMoney(
-          sanitizedItems.reduce((sum, item) => sum + clampMoney(item.amount), 0)
+        total_amount: Math.abs(
+          clampMoney(sanitizedItems.reduce((sum, item) => sum + clampMoney(item.amount), 0))
         ),
         material_cost: null,
         nico_amount: null,
@@ -3001,10 +3006,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     setText(els.registryVisibleCount, String(rows.length));
 
     const visibleSum = rows.reduce((sum, tx) => {
-      const amount =
-        tx.kind === "nico"
-          ? clampMoney(tx.total_amount || 0)
-          : clampMoney(tx.total_amount || 0);
+      const amount = getTransactionSignedTotal(tx);
       return sum + amount;
     }, 0);
 
@@ -3026,10 +3028,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
           const company = state.companyMapByCustomerId.get(tx.customer_id) || null;
           const items = state.transactionItemsByTxId.get(tx.id) || [];
           const customerName = customerDisplayName(customer, company);
-          const total =
-            tx.kind === "nico"
-              ? clampMoney(tx.total_amount || 0)
-              : clampMoney(tx.total_amount || 0);
+          const total = getTransactionSignedTotal(tx, items);
 
           const statusMeta = extractStatusMeta(tx.comments);
           const code = getTransactionCode(tx);
@@ -3211,10 +3210,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       });
 
       const monthTotal = txs.reduce((sum, tx) => {
-        const amount =
-          kind === "nico"
-            ? clampMoney(tx.total_amount || 0)
-            : clampMoney(tx.total_amount || 0);
+        const amount = getTransactionSignedTotal(tx);
         return sum + amount;
       }, 0);
 
@@ -3645,7 +3641,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       const customer = state.customerMap.get(tx.customer_id);
       const company = state.companyMapByCustomerId.get(tx.customer_id) || null;
       const meta = extractStatusMeta(tx.comments);
-      return `<article class="list-item pending-record-item"><div class="list-item-main"><div class="list-item-title">${escapeHtml(customerDisplayName(customer, company))} · ${escapeHtml(getTransactionCode(tx))}</div><div class="list-item-subtitle">Total: ${escapeHtml(euro(tx.total_amount || 0))} · Pagado: <span style="color:#ff9b9b">${escapeHtml(euro(meta.paidAmount || 0))}</span></div></div><div class="list-item-actions pending-actions"><button class="btn ${meta.paidFull?"btn-primary":"btn-danger"}" data-toggle-pending="paid" data-tx-id="${escapeHtml(tx.id)}" type="button">Pagado</button><button class="btn ${meta.delivered?"btn-primary":"btn-ghost"}" data-toggle-pending="delivered" data-tx-id="${escapeHtml(tx.id)}" type="button">Entregado</button></div></article>`;
+      return `<article class="list-item pending-record-item"><div class="list-item-main"><div class="list-item-title">${escapeHtml(customerDisplayName(customer, company))} · ${escapeHtml(getTransactionCode(tx))}</div><div class="list-item-subtitle">Total: ${escapeHtml(euro(getTransactionSignedTotal(tx)))} · Pagado: <span style="color:#ff9b9b">${escapeHtml(euro(meta.paidAmount || 0))}</span></div></div><div class="list-item-actions pending-actions"><button class="btn ${meta.paidFull?"btn-primary":"btn-danger"}" data-toggle-pending="paid" data-tx-id="${escapeHtml(tx.id)}" type="button">Pagado</button><button class="btn ${meta.delivered?"btn-primary":"btn-ghost"}" data-toggle-pending="delivered" data-tx-id="${escapeHtml(tx.id)}" type="button">Entregado</button></div></article>`;
     }).join(""));
   }
 
@@ -3698,7 +3694,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       const c=state.customerMap.get(tx.customer_id);
       const customerName = customerDisplayName(c,state.companyMapByCustomerId.get(tx.customer_id)||null);
       const concepts = getTransactionConceptText(tx) || "Sin concepto";
-      const line = `${codeByTxId.get(tx.id) || getTransactionCode(tx)} | ${formatDate(tx.tx_date)} | ${customerName} | Concepto: ${concepts} | ${euro(tx.total_amount||0)}`;
+      const line = `${codeByTxId.get(tx.id) || getTransactionCode(tx)} | ${formatDate(tx.tx_date)} | ${customerName} | Concepto: ${concepts} | ${euro(getTransactionSignedTotal(tx))}`;
       const wrappedLines = doc.splitTextToSize(line, 520);
       doc.text(wrappedLines,40,y);
       y += (wrappedLines.length * 12) + 6;
