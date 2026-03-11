@@ -597,6 +597,49 @@
             <button class="tab-btn" data-searchtab="empresa" type="button">Empresas</button>
           </div>
 
+          <section
+            id="returnFormBox"
+            class="subcard hidden"
+            aria-labelledby="returnFormTitle"
+          >
+            <div class="panel-head">
+              <div>
+                <h3 id="returnFormTitle">Registrar devolución</h3>
+                <p class="muted small">
+                  Registra una devolución asociada al registro seleccionado.
+                </p>
+              </div>
+
+              <div class="row">
+                <button id="btnReturnCancel" class="btn btn-ghost" type="button">
+                  Cerrar
+                </button>
+              </div>
+            </div>
+
+            <div class="grid2">
+              <div class="field">
+                <label for="returnDate">Fecha de devolución</label>
+                <input id="returnDate" type="date" />
+              </div>
+
+              <div class="field">
+                <label for="returnAmount">Monto a devolver (€)</label>
+                <input id="returnAmount" type="number" step="0.01" inputmode="decimal" placeholder="0.00" />
+              </div>
+
+              <div class="field field-full">
+                <label for="returnReason">Razón de la devolución</label>
+                <input id="returnReason" type="text" placeholder="Opcional" />
+              </div>
+            </div>
+
+            <div class="row row-spaced">
+              <button id="btnReturnSave" class="btn btn-primary" type="button">Procesar devolución</button>
+              <span id="returnMsg" class="muted" aria-live="polite"></span>
+            </div>
+          </section>
+
           <div class="list-head muted">
             <span>Listado</span>
             <span id="txListCount">0 resultados</span>

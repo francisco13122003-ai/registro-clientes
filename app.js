@@ -289,6 +289,14 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     pendingRecordsList: $("pendingRecordsList"),
     pendingRecordsEmpty: $("pendingRecordsEmpty"),
     searchTabButtons: [...document.querySelectorAll("#panelSearch [data-searchtab]")],
+
+    returnFormBox: $("returnFormBox"),
+    returnDate: $("returnDate"),
+    returnAmount: $("returnAmount"),
+    returnReason: $("returnReason"),
+    btnReturnSave: $("btnReturnSave"),
+    btnReturnCancel: $("btnReturnCancel"),
+    returnMsg: $("returnMsg"),
   };
 
   // =========================================
@@ -321,6 +329,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     attachmentsByCustomerId: new Map(),
     transactions: [],
     transactionItemsByTxId: new Map(),
+    returnsByTxId: new Map(),
 
     currentCustomerId: null,
     currentDetailCustomerId: null,
@@ -339,6 +348,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       lastFilterText: "",
       lastDateFrom: "",
       lastDateTo: "",
+      returningTxId: null,
     },
 
     accounting: {
@@ -899,6 +909,184 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     }
   }
 
+
+  async function fetchReturns() {
+    try {
+      const { data, error } = await withTimeout(
+        supabase
+          .from("devoluciones")
+          .select("*")
+          .order("fecha_devolucion", { ascending: false })
+          .order("created_at", { ascending: false }),
+        15000
+      );
+
+      if (error) throw error;
+
+      const grouped = new Map();
+      for (const row of uniqueBy(safeArray(data), (item) => item.id)) {
+        const list = grouped.get(row.transaction_id) || [];
+        list.push(row);
+        grouped.set(row.transaction_id, list);
+      }
+
+      state.returnsByTxId = grouped;
+    } catch (error) {
+      console.error("No se pudieron cargar las devoluciones:", error);
+      state.returnsByTxId = new Map();
+    }
+  }
+
+  async function createReturn({ transactionId, returnDate, returnAmount, reason }) {
+    const { data, error } = await supabase
+      .from("devoluciones")
+      .insert([
+        {
+          transaction_id: transactionId,
+          fecha_devolucion: returnDate,
+          monto_devolucion: returnAmount,
+          razon: reason,
+          status: "procesada",
+        },
+      ])
+      .select("*")
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  function getReturnsForTransaction(txId) {
+    return state.returnsByTxId.get(txId) || [];
+  }
+
+  function getReturnedAmountForTransaction(txId) {
+    return getReturnsForTransaction(txId).reduce(
+      (sum, row) => sum + clampMoney(row.monto_devolucion || 0),
+      0
+    );
+  }
+
+  function openReturnForm(txId) {
+    const tx = state.transactions.find((row) => row.id === txId);
+    if (!tx) {
+      showToast("No se ha encontrado el registro.", "error");
+      return;
+    }
+
+    state.registry.returningTxId = txId;
+    if (els.returnDate) els.returnDate.value = todayISO();
+    if (els.returnAmount) els.returnAmount.value = "";
+    if (els.returnReason) els.returnReason.value = "";
+    setInlineMessage(els.returnMsg, "", "muted");
+    show(els.returnFormBox);
+    els.returnAmount?.focus();
+  }
+
+  function closeReturnForm() {
+    state.registry.returningTxId = null;
+    setInlineMessage(els.returnMsg, "", "muted");
+    hide(els.returnFormBox);
+  }
+
+  async function processReturnForm() {
+    const transactionId = state.registry.returningTxId;
+    const tx = state.transactions.find((row) => row.id === transactionId);
+
+    if (!tx) {
+      setInlineMessage(els.returnMsg, "No se ha encontrado la transacción.", "error");
+      return;
+    }
+
+    const returnDate = normalize(els.returnDate?.value) || todayISO();
+    const returnAmount = clampMoney(els.returnAmount?.value || 0);
+    const reason = normalize(els.returnReason?.value || "");
+
+    if (!returnDate) {
+      setInlineMessage(els.returnMsg, "La fecha de devolución es obligatoria.", "error");
+      return;
+    }
+
+    if (!(returnAmount > 0)) {
+      setInlineMessage(els.returnMsg, "El monto a devolver debe ser mayor que 0.", "error");
+      return;
+    }
+
+    const currentTotal = clampMoney(tx.total_amount || 0);
+    if (returnAmount > currentTotal) {
+      setInlineMessage(els.returnMsg, "El monto no puede superar el total actual de la transacción.", "error");
+      return;
+    }
+
+    setDisabled(els.btnReturnSave, true);
+    setInlineMessage(els.returnMsg, "Procesando devolución...", "muted");
+
+    try {
+      const createdReturn = await createReturn({
+        transactionId,
+        returnDate,
+        returnAmount,
+        reason,
+      });
+
+      const isFullReturn = clampMoney(currentTotal - returnAmount) === 0;
+      const nextTotal = isFullReturn ? 0 : clampMoney(currentTotal - returnAmount);
+
+      const currentMeta = extractStatusMeta(tx.comments);
+      const nextComments = buildCommentWithMeta(stripStatusMeta(tx.comments), {
+        ...currentMeta,
+        paidFull: isFullReturn ? false : true,
+      });
+
+      let { error: txUpdateError } = await supabase
+        .from("transactions")
+        .update({
+          total_amount: nextTotal,
+          paidFull: isFullReturn ? false : true,
+          comments: nextComments,
+        })
+        .eq("id", transactionId);
+
+      if (txUpdateError && String(txUpdateError.message || "").toLowerCase().includes("paidfull")) {
+        const fallback = await supabase
+          .from("transactions")
+          .update({
+            total_amount: nextTotal,
+            comments: nextComments,
+          })
+          .eq("id", transactionId);
+        txUpdateError = fallback.error;
+      }
+
+      if (txUpdateError) throw txUpdateError;
+
+      const list = getReturnsForTransaction(transactionId);
+      state.returnsByTxId.set(transactionId, [createdReturn, ...list]);
+      state.transactions = state.transactions.map((row) =>
+        row.id === transactionId
+          ? {
+              ...row,
+              total_amount: nextTotal,
+              comments: nextComments,
+            }
+          : row
+      );
+
+      renderRegistryList();
+      renderPendingRecords();
+      renderHomeStats();
+      renderAccountingView();
+
+      closeReturnForm();
+      showToast("Devolución registrada correctamente.", "success");
+    } catch (error) {
+      console.error(error);
+      setInlineMessage(els.returnMsg, error?.message || "No se pudo registrar la devolución.", "error");
+    } finally {
+      setDisabled(els.btnReturnSave, false);
+    }
+  }
+
   async function bootstrapDataAfterAuth() {
   if (state.isBootstrapping) return;
   state.isBootstrapping = true;
@@ -907,6 +1095,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     await Promise.all([
       fetchCustomersAndCompanies(),
       fetchTransactionsBase(),
+      fetchReturns(),
     ]);
 
     renderAllCoreViews();
@@ -2285,6 +2474,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     setText(els.txMsg, "");
     setInlineMessage(els.txMsg, "");
     hide(els.btnTxDelete);
+    closeReturnForm();
 
     if (els.txCustomerSearch) els.txCustomerSearch.value = "";
     if (els.txDate) els.txDate.value = todayISO();
@@ -2420,28 +2610,40 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     state.loading.registry = true;
 
     try {
-      const [{ data: txData, error: txError }, { data: itemsData, error: itemsError }] =
-        await Promise.all([
-          withTimeout(
-            supabase
-              .from("transactions")
-              .select("*")
-              .order("tx_date", { ascending: false })
-              .order("created_at", { ascending: false })
-              .limit(REGISTRY_LIMIT),
-            18000
-          ),
-          withTimeout(
-            supabase
-              .from("transaction_items")
-              .select("*")
-              .order("created_at", { ascending: true }),
-            18000
-          ),
-        ]);
+      const [
+        { data: txData, error: txError },
+        { data: itemsData, error: itemsError },
+        { data: returnsData, error: returnsError },
+      ] = await Promise.all([
+        withTimeout(
+          supabase
+            .from("transactions")
+            .select("*")
+            .order("tx_date", { ascending: false })
+            .order("created_at", { ascending: false })
+            .limit(REGISTRY_LIMIT),
+          18000
+        ),
+        withTimeout(
+          supabase
+            .from("transaction_items")
+            .select("*")
+            .order("created_at", { ascending: true }),
+          18000
+        ),
+        withTimeout(
+          supabase
+            .from("devoluciones")
+            .select("*")
+            .order("fecha_devolucion", { ascending: false })
+            .order("created_at", { ascending: false }),
+          18000
+        ),
+      ]);
 
       if (txError) throw txError;
       if (itemsError) throw itemsError;
+      if (returnsError) throw returnsError;
 
       state.transactions = uniqueBy(safeArray(txData), (row) => row.id);
 
@@ -2455,6 +2657,14 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         itemsMap.set(item.transaction_id, list);
       }
       state.transactionItemsByTxId = itemsMap;
+
+      const returnsMap = new Map();
+      for (const row of uniqueBy(safeArray(returnsData), (item) => item.id)) {
+        const list = returnsMap.get(row.transaction_id) || [];
+        list.push(row);
+        returnsMap.set(row.transaction_id, list);
+      }
+      state.returnsByTxId = returnsMap;
 
       dedupeTransactionsInState();
       state.registry.txLoadedOnce = true;
@@ -3051,6 +3261,9 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
                   .join(" · ")
               : cleanComments || "Sin detalle";
 
+          const refundedAmount = getReturnedAmountForTransaction(tx.id);
+          const hasReturn = refundedAmount > 0;
+
           const meta = [
             `<span class="pill primary">${escapeHtml(transactionKindLabel(tx.kind))}</span>`,
             `<span class="pill">${escapeHtml(formatDate(tx.tx_date))}</span>`,
@@ -3061,6 +3274,9 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
             `<span class="pill">${escapeHtml(code)}</span>`,
             `<span class="pill ${statusMeta.paidFull ? "success" : "danger"}">${statusMeta.paidFull ? "Pagado" : "Pago pendiente"}</span>`,
             `<span class="pill ${statusMeta.delivered ? "success" : "warning"}">${statusMeta.delivered ? "Entregado" : "Sin entregar"}</span>`,
+            hasReturn
+              ? `<span class="pill warning">Devolución registrada: ${escapeHtml(euro(refundedAmount))}</span>`
+              : "",
             txMatchesOpenFromDetail(tx)
               ? `<span class="pill warning">Cliente actual</span>`
               : "",
@@ -3080,6 +3296,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
               <div class="list-item-actions registry-item-actions">
                 <button class="btn btn-ghost" type="button" data-open-tx="${escapeHtml(tx.id)}">Abrir</button>
                 <button class="btn btn-primary" type="button" data-edit-tx="${escapeHtml(tx.id)}">Editar</button>
+                <button class="btn btn-ghost" type="button" data-return-tx="${escapeHtml(tx.id)}">Devolver</button>
                 <button class="btn btn-danger" type="button" data-delete-tx="${escapeHtml(tx.id)}">Eliminar</button>
               </div>
             </article>
@@ -3325,6 +3542,12 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       const deleteTxId = button.dataset.deleteTx;
       if (deleteTxId) {
         deleteTransaction(deleteTxId).catch(console.error);
+        return;
+      }
+
+      const returnTxId = button.dataset.returnTx;
+      if (returnTxId) {
+        openReturnForm(returnTxId);
       }
     });
   }
@@ -3457,6 +3680,15 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     els.btnTxDelete?.addEventListener("click", () => {
       deleteTransaction().catch(console.error);
     });
+
+    els.btnReturnCancel?.addEventListener("click", () => {
+      closeReturnForm();
+    });
+
+    els.btnReturnSave?.addEventListener("click", () => {
+      processReturnForm().catch(console.error);
+    });
+
     els.txPaidFull?.addEventListener("change", () => {
       updateTxPaidAmountState();
     });
@@ -3513,7 +3745,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     state.isBootstrapping = true;
 
     try {
-      await Promise.all([fetchCustomersAndCompanies(), fetchTransactionsFull()]);
+      await Promise.all([fetchCustomersAndCompanies(), fetchTransactionsFull(), fetchReturns()]);
       renderAllCoreViews();
       renderAccountingYearOptions();
       renderAccountingView();
