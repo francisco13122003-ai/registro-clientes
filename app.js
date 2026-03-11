@@ -2206,7 +2206,6 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
                 <input
                   type="number"
                   step="0.01"
-                  inputmode="decimal"
                   value="${escapeHtml(item.amount || "")}"
                   data-item-amount="${escapeHtml(item.id)}"
                   placeholder="0.00"
@@ -2653,6 +2652,17 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     return "";
   }
 
+  function isNonNegativeConstraintError(error) {
+    const message = String(error?.message || "").toLowerCase();
+    const details = String(error?.details || "").toLowerCase();
+    return (
+      message.includes("nonnegative") ||
+      details.includes("nonnegative") ||
+      message.includes("transaction_items_amount_nonnegative") ||
+      details.includes("transaction_items_amount_nonnegative")
+    );
+  }
+
   function findPotentialDuplicateTx(txPayload, itemsPayload, editingTxId = null) {
     const incomingFingerprint = buildTransactionClientFingerprint(txPayload, itemsPayload);
 
@@ -2808,11 +2818,15 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         String(error?.message || "").toLowerCase().includes("client_request_id") ||
         String(error?.message || "").toLowerCase().includes("unique");
 
+      const negativeConstraintError = isNonNegativeConstraintError(error);
+
       setInlineMessage(
         els.txMsg,
         possibleDuplicate
           ? "Supabase ha detectado una posible duplicidad y no se ha guardado el registro."
-          : error?.message || "No se pudo guardar el registro.",
+          : negativeConstraintError
+            ? "Tu base de datos aún tiene una restricción de no-negativos en transaction_items. Aplica la migración incluida para permitir importes negativos."
+            : error?.message || "No se pudo guardar el registro.",
         "error"
       );
     } finally {
