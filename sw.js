@@ -1,4 +1,4 @@
-const SW_VERSION = "flopitec-sw-v3";
+const SW_VERSION = "flopitec-sw-v4";
 const STATIC_CACHE = `${SW_VERSION}-static`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
 
