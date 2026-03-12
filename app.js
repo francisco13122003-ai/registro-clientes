@@ -2421,6 +2421,10 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     const createdB = new Date(b?.created_at || 0).getTime();
     if (createdA !== createdB) return createdB - createdA;
 
+    const txDateA = new Date(a?.tx_date || 0).getTime();
+    const txDateB = new Date(b?.tx_date || 0).getTime();
+    if (txDateA !== txDateB) return txDateB - txDateA;
+
     return String(b?.id || "").localeCompare(String(a?.id || ""));
   }
 
