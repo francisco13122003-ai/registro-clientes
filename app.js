@@ -2413,6 +2413,22 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     return String(codeA).localeCompare(String(codeB));
   }
 
+  function compareTransactionsForRegistryDesc(a, b) {
+    const createdA = new Date(a?.created_at || 0).getTime();
+    const createdB = new Date(b?.created_at || 0).getTime();
+    if (createdA !== createdB) return createdB - createdA;
+
+    const txDateA = new Date(a?.tx_date || 0).getTime();
+    const txDateB = new Date(b?.tx_date || 0).getTime();
+    if (txDateA !== txDateB) return txDateB - txDateA;
+
+    return String(b?.id || "").localeCompare(String(a?.id || ""));
+  }
+
+  function compareTransactionsForPdfAsc(a, b, codeByTxId = new Map()) {
+    return compareTransactionsByCodeAsc(a, b, codeByTxId);
+  }
+
   // =========================================
   // FETCH REGISTRY DATA
   // =========================================
@@ -2989,7 +3005,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       });
     }
 
-    return sortByDateDesc(rows, "tx_date");
+    return [...rows].sort(compareTransactionsForRegistryDesc);
   }
 
   function renderRegistryList() {
@@ -3693,7 +3709,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
     const doc = new jspdf({unit:"pt",format:"a4"});
     let y=40; doc.setFontSize(12); doc.text(`Exportación ${transactionKindLabel(kind)} · T${quarter} ${year}`,40,y); y+=24; doc.setFontSize(9);
-    [...rows].sort((a, b) => compareTransactionsByCodeAsc(a, b, codeByTxId)).forEach((tx)=>{
+    [...rows].sort((a, b) => compareTransactionsForPdfAsc(a, b, codeByTxId)).forEach((tx)=>{
       if(y>760){doc.addPage(); y=40;}
       const c=state.customerMap.get(tx.customer_id);
       const customerName = customerDisplayName(c,state.companyMapByCustomerId.get(tx.customer_id)||null);
