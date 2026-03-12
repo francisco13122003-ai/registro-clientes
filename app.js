@@ -3005,12 +3005,9 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       });
     }
 
-    return [...rows].sort((a, b) => {
-      const byCodeAsc = compareTransactionsByCodeAsc(a, b);
-      if (byCodeAsc !== 0) return byCodeAsc * -1;
-      return compareTransactionsForRegistryDesc(a, b);
-    });
-  }
+
+    return [...rows].sort(compareTransactionsForRegistryDesc);
+
 
   function renderRegistryList() {
     if (!els.txList) return;
