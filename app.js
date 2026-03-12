@@ -2414,11 +2414,6 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
   }
 
   function compareTransactionsForRegistryDesc(a, b) {
-    // Orden del listado en Ventas/Reparaciones: código más alto primero.
-    // Esta lógica debe permanecer separada del orden ascendente usado en PDF.
-    const byCodeAsc = compareTransactionsByCodeAsc(a, b);
-    if (byCodeAsc !== 0) return byCodeAsc * -1;
-
     const createdA = new Date(a?.created_at || 0).getTime();
     const createdB = new Date(b?.created_at || 0).getTime();
     if (createdA !== createdB) return createdB - createdA;
@@ -3010,7 +3005,11 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       });
     }
 
-    return [...rows].sort(compareTransactionsForRegistryDesc);
+    return [...rows].sort((a, b) => {
+      const byCodeAsc = compareTransactionsByCodeAsc(a, b);
+      if (byCodeAsc !== 0) return byCodeAsc * -1;
+      return compareTransactionsForRegistryDesc(a, b);
+    });
   }
 
   function renderRegistryList() {
