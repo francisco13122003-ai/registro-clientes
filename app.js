@@ -226,12 +226,16 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
 
     // client history mini
     btnClientHistoryOpenRegistry: $("btnClientHistoryOpenRegistry"),
+    btnToggleClientHistoryOrder: $("btnToggleClientHistoryOrder"),
+    clientHistorySortDirectionLabel: $("clientHistorySortDirectionLabel"),
     clientHistoryList: $("clientHistoryList"),
     clientHistoryEmpty: $("clientHistoryEmpty"),
     clientHistoryTabs: [...document.querySelectorAll('[data-chtab]')],
 
     // registry/accounting reserved for part 2
     btnNewTx: $("btnNewTx"),
+    btnToggleRegistryOrder: $("btnToggleRegistryOrder"),
+    registrySortDirectionLabel: $("registrySortDirectionLabel"),
     txFormBox: $("txFormBox"),
     txFormTitle: $("txFormTitle"),
     btnTxCancel: $("btnTxCancel"),
@@ -325,6 +329,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     currentCustomerId: null,
     currentDetailCustomerId: null,
     currentDetailHistoryKind: "ticket",
+    currentDetailHistorySortDescending: true,
     currentSearchMode: "cliente",
 
     editingCustomerId: null,
@@ -339,6 +344,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       lastFilterText: "",
       lastDateFrom: "",
       lastDateTo: "",
+      sortDescending: true,
     },
 
     accounting: {
@@ -1766,8 +1772,37 @@ async function deleteCurrentCustomer() {
     });
   }
 
+  function updateClientHistorySortDirectionUI() {
+    if (els.clientHistorySortDirectionLabel) {
+      setText(
+        els.clientHistorySortDirectionLabel,
+        state.currentDetailHistorySortDescending
+          ? "más reciente a más antiguo"
+          : "más antiguo a más reciente"
+      );
+    }
+
+    if (els.btnToggleClientHistoryOrder) {
+      const nextDirection = state.currentDetailHistorySortDescending
+        ? "ascendente"
+        : "descendente";
+      els.btnToggleClientHistoryOrder.setAttribute(
+        "aria-label",
+        `Invertir listado (pasar a orden ${nextDirection})`
+      );
+      els.btnToggleClientHistoryOrder.title = `Cambiar a orden ${nextDirection}`;
+    }
+  }
+
+  function getClientHistoryRowsSorted(customerId, kind) {
+    const rowsDesc = sortByDateDesc(getTransactionsForCustomer(customerId, kind), "tx_date");
+    return state.currentDetailHistorySortDescending ? rowsDesc : [...rowsDesc].reverse();
+  }
+
   function renderClientHistory() {
     if (!els.clientHistoryList) return;
+
+    updateClientHistorySortDirectionUI();
 
     const customerId = state.currentDetailCustomerId;
     if (!customerId) {
@@ -1776,10 +1811,10 @@ async function deleteCurrentCustomer() {
       return;
     }
 
-    const rows = sortByDateDesc(
-      getTransactionsForCustomer(customerId, state.currentDetailHistoryKind),
-      "tx_date"
-    ).slice(0, CLIENT_HISTORY_LIMIT);
+    const rows = getClientHistoryRowsSorted(customerId, state.currentDetailHistoryKind).slice(
+      0,
+      CLIENT_HISTORY_LIMIT
+    );
 
     if (!rows.length) {
       setHTML(els.clientHistoryList, "");
@@ -1980,6 +2015,11 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       if (!state.currentDetailCustomerId) return;
       state.registry.openFromDetailCustomerId = state.currentDetailCustomerId;
       navigateTo("registry");
+    });
+
+    els.btnToggleClientHistoryOrder?.addEventListener("click", () => {
+      state.currentDetailHistorySortDescending = !state.currentDetailHistorySortDescending;
+      renderClientHistory();
     });
 
     els.btnOfflineExport?.addEventListener("click", exportOfflineBackup);
@@ -2423,6 +2463,31 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     if (txDateA !== txDateB) return txDateB - txDateA;
 
     return String(b?.id || "").localeCompare(String(a?.id || ""));
+  }
+
+  function compareTransactionsForRegistry(a, b) {
+    const direction = state.registry.sortDescending ? 1 : -1;
+    return compareTransactionsForRegistryDesc(a, b) * direction;
+  }
+
+  function updateRegistrySortDirectionUI() {
+    if (els.registrySortDirectionLabel) {
+      setText(
+        els.registrySortDirectionLabel,
+        state.registry.sortDescending
+          ? "más reciente a más antiguo"
+          : "más antiguo a más reciente"
+      );
+    }
+
+    if (els.btnToggleRegistryOrder) {
+      const nextDirection = state.registry.sortDescending ? "ascendente" : "descendente";
+      els.btnToggleRegistryOrder.setAttribute(
+        "aria-label",
+        `Invertir listado (pasar a orden ${nextDirection})`
+      );
+      els.btnToggleRegistryOrder.title = `Cambiar a orden ${nextDirection}`;
+    }
   }
 
   function compareTransactionsForPdfAsc(a, b, codeByTxId = new Map()) {
@@ -3005,11 +3070,13 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       });
     }
 
-    return [...rows].sort(compareTransactionsForRegistryDesc);
+    return [...rows].sort(compareTransactionsForRegistry);
   }
 
   function renderRegistryList() {
     if (!els.txList) return;
+
+    updateRegistrySortDirectionUI();
 
     const rows = getRegistryFilteredTransactions();
 
@@ -3444,6 +3511,11 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
     els.btnNewTx?.addEventListener("click", () => {
       openNewTxForm(state.registry.currentKind);
+    });
+
+    els.btnToggleRegistryOrder?.addEventListener("click", () => {
+      state.registry.sortDescending = !state.registry.sortDescending;
+      renderRegistryList();
     });
 
     els.btnTxCancel?.addEventListener("click", () => {

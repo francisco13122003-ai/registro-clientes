@@ -263,12 +263,15 @@
             <div>
               <h2 id="panelRegistryTitle">Registro</h2>
               <p class="muted small">
-                Histórico de ventas y reparaciones ordenado de más reciente a
-                más antiguo.
+                Histórico de ventas y reparaciones ordenado de
+                <span id="registrySortDirectionLabel">más reciente a más antiguo</span>.
               </p>
             </div>
 
             <div class="row">
+              <button id="btnToggleRegistryOrder" class="btn btn-ghost" type="button">
+                Invertir listado
+              </button>
               <button id="btnNewTx" class="btn btn-primary" type="button">
                 Crear venta / reparación
               </button>
@@ -1113,11 +1116,15 @@
                 <div>
                   <h3 id="clientHistoryTitle">Histórico del cliente</h3>
                   <p class="muted small">
-                    Tickets · Facturas · Otros · Nico.
+                    Tickets · Facturas · Otros · Nico ordenados de
+                    <span id="clientHistorySortDirectionLabel">más reciente a más antiguo</span>.
                   </p>
                 </div>
 
                 <div class="row">
+                  <button id="btnToggleClientHistoryOrder" class="btn btn-ghost" type="button">
+                    Invertir listado
+                  </button>
                   <button
                     id="btnClientHistoryOpenRegistry"
                     class="btn btn-ghost"
