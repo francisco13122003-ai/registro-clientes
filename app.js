@@ -3005,8 +3005,9 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       });
     }
 
+
     return [...rows].sort(compareTransactionsForRegistryDesc);
-  }
+
 
   function renderRegistryList() {
     if (!els.txList) return;
