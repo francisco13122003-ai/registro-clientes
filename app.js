@@ -2538,6 +2538,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       state.transactionItemsByTxId = itemsMap;
 
       dedupeTransactionsInState();
+      syncTxCodeRegistryFromState();
       state.registry.txLoadedOnce = true;
     } finally {
       state.loading.registry = false;
@@ -3644,6 +3645,10 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     return `${kind || "rg"}-${String(year || "00")}`;
   }
 
+  function getTxYearSuffix(tx) {
+    return String(new Date(tx.tx_date || tx.created_at || Date.now()).getFullYear()).slice(-2);
+  }
+
   function extractSequenceFromCode(code, kind, year) {
     if (!code) return 0;
     const prefix = getKindPrefix(kind);
@@ -3652,12 +3657,54 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     return match ? Number(match[1]) : 0;
   }
 
+  function compareTransactionsChronologicalAsc(a, b) {
+    const dateA = new Date(a?.tx_date || a?.created_at || 0).getTime();
+    const dateB = new Date(b?.tx_date || b?.created_at || 0).getTime();
+    if (dateA !== dateB) return dateA - dateB;
+    return String(a?.id || "").localeCompare(String(b?.id || ""));
+  }
+
+  function syncTxCodeRegistryFromState() {
+    const counters = {};
+    const sortedTransactions = [...state.transactions].sort(compareTransactionsChronologicalAsc);
+    let changed = false;
+
+    for (const tx of sortedTransactions) {
+      const year = getTxYearSuffix(tx);
+      const key = buildCounterKey(tx.kind, year);
+      const code = state.txCodeRegistry.byTxId.get(tx.id) || "";
+      const sequence = extractSequenceFromCode(code, tx.kind, year);
+
+      if (sequence > 0) {
+        counters[key] = Math.max(Number(counters[key] || 0), sequence);
+      }
+    }
+
+    for (const tx of sortedTransactions) {
+      const year = getTxYearSuffix(tx);
+      const key = buildCounterKey(tx.kind, year);
+      const code = state.txCodeRegistry.byTxId.get(tx.id) || "";
+      const sequence = extractSequenceFromCode(code, tx.kind, year);
+
+      if (sequence > 0) continue;
+
+      const next = Number(counters[key] || 0) + 1;
+      const generatedCode = `${getKindPrefix(tx.kind)}-${String(next).padStart(5, "0")}-${year}`;
+      state.txCodeRegistry.byTxId.set(tx.id, generatedCode);
+      counters[key] = next;
+      changed = true;
+    }
+
+    state.txCodeRegistry.counters = counters;
+    if (changed) persistTxCodeRegistry();
+  }
+
   function nextCodeFor(kind, year) {
     const key = buildCounterKey(kind, year);
     let maxSeen = Number(state.txCodeRegistry.counters[key] || 0);
 
     for (const tx of state.transactions) {
-      const txYear = String(new Date(tx.tx_date || tx.created_at || Date.now()).getFullYear()).slice(-2);
+      const txYear = getTxYearSuffix(tx);
       if (tx.kind !== kind || txYear !== String(year)) continue;
       const knownCode = state.txCodeRegistry.byTxId.get(tx.id) || "";
       maxSeen = Math.max(maxSeen, extractSequenceFromCode(knownCode, kind, year));
@@ -3670,7 +3717,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
   }
 
   function getTransactionCode(tx) {
-    const year = String(new Date(tx.tx_date || tx.created_at || Date.now()).getFullYear()).slice(-2);
+    const year = getTxYearSuffix(tx);
     if (state.txCodeRegistry.byTxId.has(tx.id)) {
       return state.txCodeRegistry.byTxId.get(tx.id);
     }
