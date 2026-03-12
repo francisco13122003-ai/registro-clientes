@@ -2414,6 +2414,8 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
   }
 
   function compareTransactionsForRegistryDesc(a, b) {
+    // Orden del listado en Ventas/Reparaciones: código más alto primero.
+    // Esta lógica debe permanecer separada del orden ascendente usado en PDF.
     const byCodeAsc = compareTransactionsByCodeAsc(a, b);
     if (byCodeAsc !== 0) return byCodeAsc * -1;
 
