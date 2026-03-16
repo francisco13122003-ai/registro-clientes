@@ -147,6 +147,12 @@
           <button class="nav-btn" data-nav="accounting" type="button">
             Contabilidad
           </button>
+          <button class="nav-btn" data-nav="fiscal" type="button">
+            Fiscalidad
+          </button>
+          <button class="nav-btn" data-nav="expenses" type="button">
+            Gastos
+          </button>
           <button class="nav-btn" data-nav="create" type="button">
             Crear ficha
           </button>
@@ -274,6 +280,9 @@
               </button>
               <button id="btnNewTx" class="btn btn-primary" type="button">
                 Crear venta / reparación
+              </button>
+              <button id="btnRegistryRefresh" class="btn btn-ghost" type="button">
+                Actualizar
               </button>
             </div>
           </div>
@@ -762,6 +771,172 @@
           </div>
         </section>
 
+
+        <!-- FISCAL -->
+        <section
+          id="panelFiscal"
+          class="card panel hidden"
+          aria-labelledby="panelFiscalTitle"
+        >
+          <div class="panel-head">
+            <div>
+              <h2 id="panelFiscalTitle">Fiscalidad (vista rápida)</h2>
+              <p class="muted small">Estado fiscal inmediato del trimestre actual y acumulado anual.</p>
+            </div>
+            <div class="row">
+              <div id="fiscalQuarterLabel" class="badge">T—</div>
+              <button id="btnFiscalRefresh" class="btn btn-ghost" type="button">Actualizar</button>
+            </div>
+          </div>
+
+          <section class="subcard">
+            <div class="grid2 grid2-compact">
+              <div class="field">
+                <label for="fiscalFilterYear">Año seleccionado</label>
+                <input id="fiscalFilterYear" type="number" placeholder="2026" />
+              </div>
+              <div class="field">
+                <label for="fiscalFilterQuarter">Trimestre seleccionado</label>
+                <select id="fiscalFilterQuarter" class="select">
+                  <option value="1">1º</option>
+                  <option value="2">2º</option>
+                  <option value="3">3º</option>
+                  <option value="4">4º</option>
+                </select>
+              </div>
+            </div>
+          </section>
+
+          <section class="subcard">
+            <div class="panel-head">
+              <h3>Trimestre actual</h3>
+            </div>
+            <div id="fiscalCardsCurrentQuarter" class="fiscal-grid"></div>
+            <div id="fiscalTicketAggregateInfoCurrent" class="muted"></div>
+          </section>
+
+          <section class="subcard">
+            <div class="panel-head">
+              <h3>Trimestre seleccionado</h3>
+            </div>
+            <div id="fiscalCardsSelectedQuarter" class="fiscal-grid"></div>
+            <div id="fiscalTicketAggregateInfoSelected" class="muted"></div>
+          </section>
+
+          <section class="subcard">
+            <div class="panel-head">
+              <h3>Ejercicio actual</h3>
+            </div>
+            <div id="fiscalYearAccumulatedCurrent"></div>
+          </section>
+
+          <section class="subcard">
+            <div class="panel-head">
+              <h3>Ejercicio seleccionado</h3>
+            </div>
+            <div id="fiscalYearAccumulatedSelected"></div>
+          </section>
+
+          <section class="subcard">
+            <div class="panel-head">
+              <h3>Tabla resumen trimestral</h3>
+              <p class="muted small">Comparativa trimestre actual vs seleccionado.</p>
+            </div>
+            <div id="fiscalQuarterSummaryTable"></div>
+          </section>
+
+          <section class="subcard">
+            <div class="panel-head">
+              <h3>Tabla resumen anual</h3>
+              <p class="muted small">Comparativa ejercicio actual vs seleccionado.</p>
+            </div>
+            <div id="fiscalYearSummaryTable"></div>
+          </section>
+        </section>
+
+        <!-- EXPENSES -->
+        <section
+          id="panelExpenses"
+          class="card panel hidden"
+          aria-labelledby="panelExpensesTitle"
+        >
+          <div class="panel-head">
+            <div>
+              <h2 id="panelExpensesTitle">Gastos</h2>
+              <p class="muted small">Listado, filtros y CRUD simple de gastos deducibles/no deducibles.</p>
+            </div>
+            <div class="row">
+              <button id="btnExpenseNew" class="btn btn-primary" type="button">Nuevo gasto</button>
+            </div>
+          </div>
+
+          <section class="subcard">
+            <div class="grid2 grid2-compact">
+              <div class="field">
+                <label for="expenseFilterYear">Año</label>
+                <input id="expenseFilterYear" type="number" placeholder="2026" />
+              </div>
+              <div class="field">
+                <label for="expenseFilterQuarter">Trimestre</label>
+                <select id="expenseFilterQuarter" class="select">
+                  <option value="">Todos</option>
+                  <option value="1">1º</option>
+                  <option value="2">2º</option>
+                  <option value="3">3º</option>
+                  <option value="4">4º</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="expenseFilterCategory">Categoría</label>
+                <input id="expenseFilterCategory" type="text" placeholder="Repuestos, alquiler..." />
+              </div>
+              <div class="field">
+                <label for="expenseFilterDeductible">Deducible</label>
+                <select id="expenseFilterDeductible" class="select">
+                  <option value="">Todos</option>
+                  <option value="true">Sí</option>
+                  <option value="false">No</option>
+                </select>
+              </div>
+            </div>
+          </section>
+
+          <section id="expenseFormBox" class="subcard hidden">
+            <div class="panel-head">
+              <h3 id="expenseFormTitle">Nuevo gasto</h3>
+              <button id="btnExpenseCancel" class="btn btn-ghost" type="button">Cerrar</button>
+            </div>
+
+            <div class="grid2">
+              <div class="field"><label for="expenseDate">Fecha</label><input id="expenseDate" type="date" /></div>
+              <div class="field"><label for="expenseConcept">Concepto</label><input id="expenseConcept" type="text" placeholder="Compra material" /></div>
+              <div class="field"><label for="expenseCategory">Categoría</label><input id="expenseCategory" type="text" placeholder="Categoría" /></div>
+              <div class="field"><label for="expenseProvider">Proveedor</label><input id="expenseProvider" type="text" placeholder="Proveedor" /></div>
+              <div class="field"><label for="expenseBase">Base imponible (€)</label><input id="expenseBase" type="number" step="0.01" inputmode="decimal" /></div>
+              <div class="field"><label for="expenseVatPercent">IVA (%)</label><input id="expenseVatPercent" type="number" step="0.01" inputmode="decimal" /></div>
+              <div class="field"><label for="expenseVatAmount">IVA (€)</label><input id="expenseVatAmount" type="number" step="0.01" inputmode="decimal" /></div>
+              <div class="field"><label for="expenseTotal">Total (€)</label><input id="expenseTotal" type="number" step="0.01" inputmode="decimal" /></div>
+              <div class="field"><label class="check" for="expenseDeductible"><input id="expenseDeductible" type="checkbox" /> <span>Deducible</span></label></div>
+              <div class="field field-full"><label for="expenseNotes">Notas</label><input id="expenseNotes" type="text" placeholder="Opcional" /></div>
+            </div>
+
+            <div class="row row-spaced">
+              <button id="btnExpenseSave" class="btn btn-primary" type="button">Guardar</button>
+              <button id="btnExpenseDelete" class="btn btn-danger hidden" type="button">Eliminar</button>
+              <button id="btnExpenseReset" class="btn btn-ghost" type="button">Limpiar</button>
+              <span id="expenseMsg" class="muted" aria-live="polite"></span>
+            </div>
+          </section>
+
+          <div class="list-head muted">
+            <span>Listado de gastos</span>
+            <span id="expenseListCount">0 resultados</span>
+          </div>
+          <div id="expenseList" class="list list-scroll"></div>
+          <div id="expenseListEmpty" class="empty-box hidden">No hay gastos para mostrar.</div>
+        </section>
+
+
         <!-- CREATE / EDIT -->
         <section
           id="panelCreate"
@@ -1059,6 +1234,14 @@
   >
     Volver
   </button>
+
+  <button
+    id="btnDetailRefresh"
+    class="btn btn-ghost"
+    type="button"
+  >
+    Actualizar
+  </button>
 </div>
 
           <div class="detail-grid">
@@ -1193,6 +1376,9 @@
 <script src="./config.js"></script>
 <script src="./supabase.js"></script>
 <script src="./utils.js"></script>
+<script src="./fiscal-core.js"></script>
+<script src="./fiscal-ui.js"></script>
+<script src="./tx-pdf-service.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="./app.js"></script>
   </body>
