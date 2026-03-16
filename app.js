@@ -165,6 +165,8 @@ const {
     panelHome: $("panelHome"),
     panelRegistry: $("panelRegistry"),
     panelAccounting: $("panelAccounting"),
+    panelFiscal: $("panelFiscal"),
+    panelExpenses: $("panelExpenses"),
     panelCreate: $("panelCreate"),
     panelSearch: $("panelSearch"),
     panelDetail: $("panelDetail"),
@@ -286,12 +288,45 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     accountingQuarter: $("accountingQuarter"),
     btnAccountingExportPdf: $("btnAccountingExportPdf"),
 
+    fiscalQuarterLabel: $("fiscalQuarterLabel"),
+    btnFiscalRefresh: $("btnFiscalRefresh"),
+    fiscalCards: $("fiscalCards"),
+    fiscalTicketAggregateInfo: $("fiscalTicketAggregateInfo"),
+    fiscalYearAccumulated: $("fiscalYearAccumulated"),
+
     txPaidFull: $("txPaidFull"),
     txPaidAmount: $("txPaidAmount"),
     txDelivered: $("txDelivered"),
 
     pendingRecordsList: $("pendingRecordsList"),
     pendingRecordsEmpty: $("pendingRecordsEmpty"),
+
+    // expenses module
+    btnExpenseNew: $("btnExpenseNew"),
+    expenseFormBox: $("expenseFormBox"),
+    expenseFormTitle: $("expenseFormTitle"),
+    btnExpenseCancel: $("btnExpenseCancel"),
+    btnExpenseSave: $("btnExpenseSave"),
+    btnExpenseDelete: $("btnExpenseDelete"),
+    btnExpenseReset: $("btnExpenseReset"),
+    expenseMsg: $("expenseMsg"),
+    expenseDate: $("expenseDate"),
+    expenseConcept: $("expenseConcept"),
+    expenseCategory: $("expenseCategory"),
+    expenseProvider: $("expenseProvider"),
+    expenseBase: $("expenseBase"),
+    expenseVatPercent: $("expenseVatPercent"),
+    expenseVatAmount: $("expenseVatAmount"),
+    expenseTotal: $("expenseTotal"),
+    expenseDeductible: $("expenseDeductible"),
+    expenseNotes: $("expenseNotes"),
+    expenseFilterYear: $("expenseFilterYear"),
+    expenseFilterQuarter: $("expenseFilterQuarter"),
+    expenseFilterCategory: $("expenseFilterCategory"),
+    expenseFilterDeductible: $("expenseFilterDeductible"),
+    expenseList: $("expenseList"),
+    expenseListEmpty: $("expenseListEmpty"),
+    expenseListCount: $("expenseListCount"),
     searchTabButtons: [...document.querySelectorAll("#panelSearch [data-searchtab]")],
   };
 
@@ -311,6 +346,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       attachments: false,
       registry: false,
       accounting: false,
+      fiscal: false,
     },
 
     currentPanel: "home",
@@ -325,6 +361,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     attachmentsByCustomerId: new Map(),
     transactions: [],
     transactionItemsByTxId: new Map(),
+    expenses: [],
 
     currentCustomerId: null,
     currentDetailCustomerId: null,
@@ -352,6 +389,15 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       kind: "ticket",
     },
 
+    fiscal: {
+      year: new Date().getFullYear(),
+      quarter: getQuarterByMonth(new Date().getMonth()),
+    },
+
+    expensesUi: {
+      editingId: null,
+    },
+
     selectedUploadFile: null,
 
     offline: {
@@ -372,6 +418,8 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     "home",
     "registry",
     "accounting",
+    "fiscal",
+    "expenses",
     "create",
     "search",
     "detail",
@@ -381,6 +429,8 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     home: els.panelHome,
     registry: els.panelRegistry,
     accounting: els.panelAccounting,
+    fiscal: els.panelFiscal,
+    expenses: els.panelExpenses,
     create: els.panelCreate,
     search: els.panelSearch,
     detail: els.panelDetail,
@@ -433,6 +483,10 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       renderHomeStats();
     } else if (panelName === "detail") {
       renderDetailPanel();
+    } else if (panelName === "fiscal") {
+      renderFiscalPanel().catch(console.error);
+    } else if (panelName === "expenses") {
+      renderExpensesPanel().catch(console.error);
     }
   }
 
@@ -465,6 +519,10 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       renderHomeStats();
     } else if (panelName === "detail") {
       renderDetailPanel();
+    } else if (panelName === "fiscal") {
+      renderFiscalPanel().catch(console.error);
+    } else if (panelName === "expenses") {
+      renderExpensesPanel().catch(console.error);
     }
   }
 
@@ -905,6 +963,253 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     }
   }
 
+  async function fetchExpenses() {
+    state.loading.fiscal = true;
+
+    try {
+      const { data, error } = await withTimeout(
+        supabase
+          .from("expenses")
+          .select("*")
+          .order("fecha", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(2000),
+        15000
+      );
+
+      if (error) throw error;
+      state.expenses = uniqueBy(safeArray(data), (row) => row.id);
+    } catch (error) {
+      console.error("No se pudieron cargar los gastos:", error);
+      state.expenses = [];
+    } finally {
+      state.loading.fiscal = false;
+    }
+  }
+
+  async function ensureExpensesLoaded() {
+    if (!state.expenses.length && navigator.onLine) {
+      await fetchExpenses();
+    }
+  }
+
+  async function renderFiscalPanel() {
+    if (!els.fiscalCards || !els.fiscalYearAccumulated) return;
+
+    const fiscalCore = window.FiscalCore;
+    const fiscalUI = window.FiscalUI;
+
+    if (!fiscalCore || !fiscalUI) {
+      setHTML(els.fiscalCards, `<div class="empty-box">No se pudo cargar el módulo fiscal.</div>`);
+      setHTML(els.fiscalYearAccumulated, "");
+      return;
+    }
+
+    await ensureTransactionsLoaded();
+    await ensureExpensesLoaded();
+
+    const snapshot = fiscalCore.calculateQuarterFiscalSnapshot({
+      transactions: state.transactions,
+      expenses: state.expenses,
+      year: state.fiscal.year,
+      quarter: state.fiscal.quarter,
+    });
+
+    const yearAccumulated = fiscalCore.calculateYearFiscalAccumulated({
+      transactions: state.transactions,
+      expenses: state.expenses,
+      year: state.fiscal.year,
+    });
+
+    setText(els.fiscalQuarterLabel, `T${state.fiscal.quarter} · ${state.fiscal.year}`);
+    setHTML(els.fiscalCards, fiscalUI.buildFiscalCardsHTML(snapshot, euro));
+    setHTML(els.fiscalTicketAggregateInfo, fiscalUI.buildTicketAggregateLineHTML(snapshot, euro));
+    setHTML(els.fiscalYearAccumulated, fiscalUI.buildYearAccumulatedHTML(yearAccumulated, euro));
+  }
+
+  function resetExpenseForm({ keepOpen = false } = {}) {
+    state.expensesUi.editingId = null;
+    if (els.expenseFormBox && !keepOpen) hide(els.expenseFormBox);
+    if (els.expenseFormBox && keepOpen) show(els.expenseFormBox);
+    if (els.expenseFormTitle) setText(els.expenseFormTitle, "Nuevo gasto");
+    if (els.expenseDate) els.expenseDate.value = todayISO();
+    if (els.expenseConcept) els.expenseConcept.value = "";
+    if (els.expenseCategory) els.expenseCategory.value = "";
+    if (els.expenseProvider) els.expenseProvider.value = "";
+    if (els.expenseBase) els.expenseBase.value = "";
+    if (els.expenseVatPercent) els.expenseVatPercent.value = "";
+    if (els.expenseVatAmount) els.expenseVatAmount.value = "";
+    if (els.expenseTotal) els.expenseTotal.value = "";
+    if (els.expenseDeductible) els.expenseDeductible.checked = false;
+    if (els.expenseNotes) els.expenseNotes.value = "";
+    hide(els.btnExpenseDelete);
+    setInlineMessage(els.expenseMsg, "");
+  }
+
+  function getExpenseFilters() {
+    return {
+      year: normalize(els.expenseFilterYear?.value),
+      quarter: normalize(els.expenseFilterQuarter?.value),
+      category: normalizeLower(els.expenseFilterCategory?.value),
+      deductible: normalize(els.expenseFilterDeductible?.value),
+    };
+  }
+
+  function filterExpensesRows() {
+    const { year, quarter, category, deductible } = getExpenseFilters();
+    return state.expenses.filter((exp) => {
+      const fecha = String(exp.fecha || "");
+      if (year && !fecha.startsWith(`${year}-`)) return false;
+      if (quarter) {
+        const d = parseISODate(fecha);
+        if (!d || String(getQuarterByMonth(d.getMonth())) !== String(quarter)) return false;
+      }
+      if (category && !normalizeLower(exp.categoria).includes(category)) return false;
+      if (deductible === "true" && !exp.deducible) return false;
+      if (deductible === "false" && !!exp.deducible) return false;
+      return true;
+    }).sort((a,b)=>String(b.fecha||"").localeCompare(String(a.fecha||"")));
+  }
+
+  function renderExpensesList() {
+    if (!els.expenseList) return;
+    const rows = filterExpensesRows();
+    setText(els.expenseListCount, `${rows.length} resultados`);
+
+    if (!rows.length) {
+      setHTML(els.expenseList, "");
+      show(els.expenseListEmpty);
+      return;
+    }
+
+    hide(els.expenseListEmpty);
+    setHTML(
+      els.expenseList,
+      rows.map((exp) => `
+        <article class="list-item">
+          <div class="list-item-main">
+            <div class="list-item-title">${escapeHtml(exp.concepto || "Sin concepto")}</div>
+            <div class="list-item-subtitle">${escapeHtml(formatDate(exp.fecha))} · ${escapeHtml(exp.categoria || "Sin categoría")} · ${escapeHtml(exp.proveedor || "Sin proveedor")}</div>
+            <div class="list-item-meta">
+              <span class="pill">Base ${escapeHtml(euro(exp.base_imponible || 0))}</span>
+              <span class="pill">IVA ${escapeHtml(euro(exp.iva_importe || 0))}</span>
+              <span class="pill success">Total ${escapeHtml(euro(exp.total || 0))}</span>
+              <span class="pill ${exp.deducible ? "success" : "warning"}">${exp.deducible ? "Deducible" : "No deducible"}</span>
+            </div>
+          </div>
+          <div class="list-item-actions">
+            <button class="btn btn-primary" type="button" data-edit-expense="${escapeHtml(String(exp.id))}">Editar</button>
+            <button class="btn btn-danger" type="button" data-delete-expense="${escapeHtml(String(exp.id))}">Eliminar</button>
+          </div>
+        </article>
+      `).join("")
+    );
+  }
+
+  function fillExpenseForm(id) {
+    const exp = state.expenses.find((x) => String(x.id) === String(id));
+    if (!exp) return;
+    state.expensesUi.editingId = exp.id;
+    show(els.expenseFormBox);
+    setText(els.expenseFormTitle, "Editar gasto");
+    show(els.btnExpenseDelete);
+    if (els.expenseDate) els.expenseDate.value = exp.fecha || todayISO();
+    if (els.expenseConcept) els.expenseConcept.value = exp.concepto || "";
+    if (els.expenseCategory) els.expenseCategory.value = exp.categoria || "";
+    if (els.expenseProvider) els.expenseProvider.value = exp.proveedor || "";
+    if (els.expenseBase) els.expenseBase.value = exp.base_imponible ?? "";
+    if (els.expenseVatPercent) els.expenseVatPercent.value = exp.iva_porcentaje ?? "";
+    if (els.expenseVatAmount) els.expenseVatAmount.value = exp.iva_importe ?? "";
+    if (els.expenseTotal) els.expenseTotal.value = exp.total ?? "";
+    if (els.expenseDeductible) els.expenseDeductible.checked = !!exp.deducible;
+    if (els.expenseNotes) els.expenseNotes.value = exp.notas || "";
+    setInlineMessage(els.expenseMsg, "");
+  }
+
+  function collectExpensePayload() {
+    return {
+      fecha: normalize(els.expenseDate?.value) || todayISO(),
+      concepto: normalize(els.expenseConcept?.value),
+      categoria: normalize(els.expenseCategory?.value) || null,
+      proveedor: normalize(els.expenseProvider?.value) || null,
+      base_imponible: clampMoney(els.expenseBase?.value || 0),
+      iva_porcentaje: clampMoney(els.expenseVatPercent?.value || 0),
+      iva_importe: clampMoney(els.expenseVatAmount?.value || 0),
+      total: clampMoney(els.expenseTotal?.value || 0),
+      deducible: !!els.expenseDeductible?.checked,
+      notas: normalize(els.expenseNotes?.value) || null,
+    };
+  }
+
+  function validateExpensePayload(payload) {
+    if (!payload.fecha) return "La fecha es obligatoria.";
+    if (!payload.concepto) return "El concepto es obligatorio.";
+    return "";
+  }
+
+  async function saveExpenseForm() {
+    const payload = collectExpensePayload();
+    const validationError = validateExpensePayload(payload);
+    if (validationError) {
+      setInlineMessage(els.expenseMsg, validationError, "error");
+      return;
+    }
+
+    const editingId = state.expensesUi.editingId;
+    setDisabled(els.btnExpenseSave, true);
+    setInlineMessage(els.expenseMsg, "Guardando...", "muted");
+
+    try {
+      if (!editingId) {
+        const { error } = await withTimeout(supabase.from("expenses").insert(payload), 12000);
+        if (error) throw error;
+      } else {
+        const { error } = await withTimeout(
+          supabase.from("expenses").update(payload).eq("id", editingId),
+          12000
+        );
+        if (error) throw error;
+      }
+
+      await fetchExpenses();
+      renderExpensesList();
+      renderFiscalPanel().catch(console.error);
+      resetExpenseForm({ keepOpen: false });
+      showToast("Gasto guardado correctamente.", "success");
+    } catch (error) {
+      console.error(error);
+      setInlineMessage(els.expenseMsg, error?.message || "No se pudo guardar el gasto.", "error");
+    } finally {
+      setDisabled(els.btnExpenseSave, false);
+    }
+  }
+
+  async function deleteExpense(id = null) {
+    const expenseId = id || state.expensesUi.editingId;
+    if (!expenseId) return;
+    const exp = state.expenses.find((x) => String(x.id) === String(expenseId));
+    const confirmed = window.confirm(`¿Eliminar gasto ${exp?.concepto || "seleccionado"}?`);
+    if (!confirmed) return;
+
+    try {
+      const { error } = await withTimeout(supabase.from("expenses").delete().eq("id", expenseId), 12000);
+      if (error) throw error;
+      await fetchExpenses();
+      renderExpensesList();
+      renderFiscalPanel().catch(console.error);
+      resetExpenseForm({ keepOpen: false });
+      showToast("Gasto eliminado.", "success");
+    } catch (error) {
+      console.error(error);
+      showToast(error?.message || "No se pudo eliminar el gasto.", "error");
+    }
+  }
+
+  async function renderExpensesPanel() {
+    await ensureExpensesLoaded();
+    renderExpensesList();
+  }
+
   async function bootstrapDataAfterAuth() {
   if (state.isBootstrapping) return;
   state.isBootstrapping = true;
@@ -913,6 +1218,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     await Promise.all([
       fetchCustomersAndCompanies(),
       fetchTransactionsBase(),
+      fetchExpenses(),
     ]);
 
     renderAllCoreViews();
@@ -931,6 +1237,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     renderCompaniesList();
     renderDetailPanel();
     renderClientHistory();
+    renderFiscalPanel().catch(console.error);
   }
 
   // =========================================
@@ -1483,6 +1790,7 @@ async function deleteCurrentCustomer() {
     navigateTo("detail");
     renderDetailPanel();
     renderClientHistory();
+    renderFiscalPanel().catch(console.error);
     fetchAttachmentsForCustomer(customerId)
       .then(() => renderAttachments())
       .catch((error) => {
@@ -1915,6 +2223,16 @@ async function deleteCurrentCustomer() {
     const deleteAttachmentId = target.dataset.deleteAttachment;
     if (deleteAttachmentId) {
       deleteAttachment(deleteAttachmentId).catch(console.error);
+      return;
+    }
+
+    if (target.dataset.editExpense) {
+      fillExpenseForm(target.dataset.editExpense);
+      return;
+    }
+
+    if (target.dataset.deleteExpense) {
+      deleteExpense(target.dataset.deleteExpense).catch(console.error);
       return;
     }
 
@@ -2442,6 +2760,132 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       .join(" · ");
   }
 
+  async function createAndAttachTransactionPdf(tx) {
+    const txPdfService = window.TxPdfService;
+    const jspdfCtor = window.jspdf?.jsPDF;
+
+    if (!tx || !tx.id || !tx.customer_id || !txPdfService || !jspdfCtor) {
+      return null;
+    }
+
+    const customer = state.customerMap.get(tx.customer_id) || null;
+    const company = state.companyMapByCustomerId.get(tx.customer_id) || null;
+    const items = state.transactionItemsByTxId.get(tx.id) || [];
+    const txCode = getTransactionCode(tx);
+
+    const data = txPdfService.buildPdfData({
+      tx,
+      items,
+      customer,
+      company,
+      txCode,
+    });
+
+    const doc = txPdfService.renderPdfToJsPdf(data, jspdfCtor);
+    const blob = doc.output("blob");
+    const fileName = txPdfService.buildTxPdfFileName({
+      txId: tx.id,
+      kind: tx.kind,
+      txDate: tx.tx_date,
+    });
+    const filePath = `transactions/${tx.id}/${Date.now()}_${fileName}`;
+
+    const { error: uploadError } = await withTimeout(
+      supabase.storage.from(STORAGE_BUCKET).upload(filePath, blob, {
+        upsert: true,
+        contentType: "application/pdf",
+      }),
+      25000
+    );
+    if (uploadError) throw uploadError;
+
+    const baseAttachmentPayload = {
+      customer_id: tx.customer_id,
+      file_name: fileName,
+      file_path: filePath,
+      mime_type: "application/pdf",
+    };
+
+    const payloadWithTx = {
+      ...baseAttachmentPayload,
+      transaction_id: tx.id,
+    };
+
+    let inserted = false;
+    let lastError = null;
+
+    for (const payload of [payloadWithTx, baseAttachmentPayload]) {
+      const { error } = await withTimeout(supabase.from("attachments").insert(payload), 12000);
+      if (!error) {
+        inserted = true;
+        break;
+      }
+      lastError = error;
+    }
+
+    if (!inserted && lastError) throw lastError;
+
+    return { fileName, filePath };
+  }
+
+  async function findTransactionPdfAttachment(txId) {
+    if (!txId) return null;
+
+    const { data: rowsByTx, error: byTxError } = await withTimeout(
+      supabase
+        .from("attachments")
+        .select("*")
+        .eq("transaction_id", txId)
+        .order("created_at", { ascending: false })
+        .limit(1),
+      12000
+    );
+
+    if (!byTxError && safeArray(rowsByTx).length) {
+      return rowsByTx[0];
+    }
+
+    const tx = state.transactions.find((row) => row.id === txId) || null;
+    if (!tx?.customer_id) return null;
+
+    const { data: rowsByName, error: byNameError } = await withTimeout(
+      supabase
+        .from("attachments")
+        .select("*")
+        .eq("customer_id", tx.customer_id)
+        .ilike("file_name", `TX-${txId}-%`)
+        .order("created_at", { ascending: false })
+        .limit(1),
+      12000
+    );
+
+    if (byNameError) throw byNameError;
+    return safeArray(rowsByName)[0] || null;
+  }
+
+  async function openTransactionPdf(txId) {
+    try {
+      const attachment = await findTransactionPdfAttachment(txId);
+      if (!attachment?.file_path) {
+        showToast("Este registro aún no tiene PDF asociado.", "warning");
+        return;
+      }
+
+      const { data, error } = await withTimeout(
+        supabase.storage.from(STORAGE_BUCKET).createSignedUrl(attachment.file_path, 120),
+        12000
+      );
+
+      if (error) throw error;
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (error) {
+      console.error(error);
+      showToast("No se pudo abrir el PDF del registro.", "error");
+    }
+  }
+
   function compareTransactionsByCodeAsc(a, b, codeByTxId = new Map()) {
     const codeA = codeByTxId.get(a.id) || getTransactionCode(a);
     const codeB = codeByTxId.get(b.id) || getTransactionCode(b);
@@ -2872,6 +3316,30 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         if (insertItemsError) throw insertItemsError;
       }
 
+      if (!editingTxId) {
+        const txForPdf = {
+          id: txId,
+          ...txPayload,
+          created_at: new Date().toISOString(),
+        };
+        state.transactionItemsByTxId.set(
+          txId,
+          itemsPayload.map((item) => ({ concept: item.concept, amount: clampMoney(item.amount) }))
+        );
+
+        createAndAttachTransactionPdf(txForPdf)
+          .then(async () => {
+            if (state.currentDetailCustomerId === txPayload.customer_id) {
+              await fetchAttachmentsForCustomer(txPayload.customer_id);
+              renderAttachments();
+            }
+          })
+          .catch((pdfError) => {
+            console.error(pdfError);
+            showToast("Registro guardado, pero no se pudo generar el PDF automático.", "warning", 4500);
+          });
+      }
+
       await fetchTransactionsFull();
       renderRegistryList();
       renderPendingRecords();
@@ -2879,6 +3347,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       renderClientHistory();
       renderAccountingYearOptions();
       renderAccountingView();
+      renderFiscalPanel().catch(console.error);
 
       resetTxForm({ keepKind: true, keepOpen: false });
       showToast("Registro guardado correctamente.", "success");
@@ -2930,6 +3399,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         renderClientHistory();
         renderAccountingYearOptions();
         renderAccountingView();
+      renderFiscalPanel().catch(console.error);
 
         resetTxForm({ keepKind: true, keepOpen: false });
         await updateOfflineCounter();
@@ -2951,6 +3421,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       renderClientHistory();
       renderAccountingYearOptions();
       renderAccountingView();
+      renderFiscalPanel().catch(console.error);
 
       resetTxForm({ keepKind: true, keepOpen: false });
       showToast("Registro eliminado correctamente.", "success");
@@ -3157,6 +3628,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
                 <button class="btn btn-ghost" type="button" data-open-tx="${escapeHtml(tx.id)}">Abrir</button>
                 <button class="btn btn-primary" type="button" data-edit-tx="${escapeHtml(tx.id)}">Editar</button>
                 <button class="btn btn-danger" type="button" data-delete-tx="${escapeHtml(tx.id)}">Eliminar</button>
+                <button class="btn btn-ghost" type="button" data-open-tx-pdf="${escapeHtml(tx.id)}">PDF</button>
               </div>
             </article>
           `;
@@ -3401,6 +3873,12 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       const deleteTxId = button.dataset.deleteTx;
       if (deleteTxId) {
         deleteTransaction(deleteTxId).catch(console.error);
+        return;
+      }
+
+      const openTxPdfId = button.dataset.openTxPdf;
+      if (openTxPdfId) {
+        openTransactionPdf(openTxPdfId).catch(console.error);
       }
     });
   }
@@ -3436,6 +3914,9 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     } else if (panelName === "accounting") {
       renderAccountingYearOptions();
       renderAccountingView();
+      renderFiscalPanel().catch(console.error);
+    } else if (panelName === "expenses") {
+      renderExpensesPanel().catch(console.error);
     }
   };
 
@@ -3451,11 +3932,16 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       renderHomeStats();
     } else if (panelName === "detail") {
       renderDetailPanel();
+    } else if (panelName === "fiscal") {
+      renderFiscalPanel().catch(console.error);
+    } else if (panelName === "expenses") {
+      renderExpensesPanel().catch(console.error);
     } else if (panelName === "registry") {
       openRegistryPanel().catch(console.error);
     } else if (panelName === "accounting") {
       renderAccountingYearOptions();
       renderAccountingView();
+      renderFiscalPanel().catch(console.error);
     }
   };
 
@@ -3508,6 +3994,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     els.accountingYear?.addEventListener("change", () => {
       state.accounting.year = normalize(els.accountingYear.value);
       renderAccountingView();
+      renderFiscalPanel().catch(console.error);
     });
 
     els.btnNewTx?.addEventListener("click", () => {
@@ -3545,6 +4032,39 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     els.btnAccountingExportPdf?.addEventListener("click", () => {
       exportAccountingQuarterPdf();
     });
+
+    els.btnFiscalRefresh?.addEventListener("click", () => {
+      fetchExpenses().then(() => renderFiscalPanel()).catch(console.error);
+    });
+
+    els.btnExpenseNew?.addEventListener("click", () => {
+      resetExpenseForm({ keepOpen: true });
+    });
+
+    els.btnExpenseCancel?.addEventListener("click", () => {
+      resetExpenseForm({ keepOpen: false });
+    });
+
+    els.btnExpenseReset?.addEventListener("click", () => {
+      resetExpenseForm({ keepOpen: true });
+    });
+
+    els.btnExpenseSave?.addEventListener("click", () => {
+      saveExpenseForm().catch(console.error);
+    });
+
+    els.btnExpenseDelete?.addEventListener("click", () => {
+      deleteExpense().catch(console.error);
+    });
+
+    [els.expenseFilterYear, els.expenseFilterQuarter, els.expenseFilterCategory, els.expenseFilterDeductible]
+      .filter(Boolean)
+      .forEach((inputEl) => {
+        const eventName = inputEl.tagName === "SELECT" ? "change" : "input";
+        inputEl.addEventListener(eventName, () => {
+          renderExpensesList();
+        });
+      });
 
     els.searchTabButtons.forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -3594,10 +4114,11 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     state.isBootstrapping = true;
 
     try {
-      await Promise.all([fetchCustomersAndCompanies(), fetchTransactionsFull()]);
+      await Promise.all([fetchCustomersAndCompanies(), fetchTransactionsFull(), fetchExpenses()]);
       renderAllCoreViews();
       renderAccountingYearOptions();
       renderAccountingView();
+      renderFiscalPanel().catch(console.error);
       await updateOfflineCounter();
       await syncOfflineQueue().catch(console.error);
     } finally {
