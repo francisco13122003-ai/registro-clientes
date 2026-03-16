@@ -1304,3 +1304,10 @@ input[type="checkbox"] {
   background: rgba(255, 184, 77, 0.1);
   color: #ffe5ba;
 }
+
+.fiscal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}

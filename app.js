@@ -165,6 +165,8 @@ const {
     panelHome: $("panelHome"),
     panelRegistry: $("panelRegistry"),
     panelAccounting: $("panelAccounting"),
+    panelFiscal: $("panelFiscal"),
+    panelExpenses: $("panelExpenses"),
     panelCreate: $("panelCreate"),
     panelSearch: $("panelSearch"),
     panelDetail: $("panelDetail"),
@@ -213,6 +215,7 @@ detailSubtitle: $("detailSubtitle"),
 detailInfo: $("detailInfo"),
 btnEditFromDetail: $("btnEditFromDetail"),
 btnBackFromDetail: $("btnBackFromDetail"),
+btnDetailRefresh: $("btnDetailRefresh"),
 btnDeleteFromDetail: $("btnDeleteFromDetail"),
 
     // attachments
@@ -234,6 +237,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
 
     // registry/accounting reserved for part 2
     btnNewTx: $("btnNewTx"),
+    btnRegistryRefresh: $("btnRegistryRefresh"),
     btnToggleRegistryOrder: $("btnToggleRegistryOrder"),
     registrySortDirectionLabel: $("registrySortDirectionLabel"),
     txFormBox: $("txFormBox"),
@@ -286,12 +290,52 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     accountingQuarter: $("accountingQuarter"),
     btnAccountingExportPdf: $("btnAccountingExportPdf"),
 
+    fiscalQuarterLabel: $("fiscalQuarterLabel"),
+    btnFiscalRefresh: $("btnFiscalRefresh"),
+    fiscalFilterYear: $("fiscalFilterYear"),
+    fiscalFilterQuarter: $("fiscalFilterQuarter"),
+    fiscalCardsCurrentQuarter: $("fiscalCardsCurrentQuarter"),
+    fiscalCardsSelectedQuarter: $("fiscalCardsSelectedQuarter"),
+    fiscalTicketAggregateInfoCurrent: $("fiscalTicketAggregateInfoCurrent"),
+    fiscalTicketAggregateInfoSelected: $("fiscalTicketAggregateInfoSelected"),
+    fiscalYearAccumulatedCurrent: $("fiscalYearAccumulatedCurrent"),
+    fiscalYearAccumulatedSelected: $("fiscalYearAccumulatedSelected"),
+    fiscalQuarterSummaryTable: $("fiscalQuarterSummaryTable"),
+    fiscalYearSummaryTable: $("fiscalYearSummaryTable"),
+
     txPaidFull: $("txPaidFull"),
     txPaidAmount: $("txPaidAmount"),
     txDelivered: $("txDelivered"),
 
     pendingRecordsList: $("pendingRecordsList"),
     pendingRecordsEmpty: $("pendingRecordsEmpty"),
+
+    // expenses module
+    btnExpenseNew: $("btnExpenseNew"),
+    expenseFormBox: $("expenseFormBox"),
+    expenseFormTitle: $("expenseFormTitle"),
+    btnExpenseCancel: $("btnExpenseCancel"),
+    btnExpenseSave: $("btnExpenseSave"),
+    btnExpenseDelete: $("btnExpenseDelete"),
+    btnExpenseReset: $("btnExpenseReset"),
+    expenseMsg: $("expenseMsg"),
+    expenseDate: $("expenseDate"),
+    expenseConcept: $("expenseConcept"),
+    expenseCategory: $("expenseCategory"),
+    expenseProvider: $("expenseProvider"),
+    expenseBase: $("expenseBase"),
+    expenseVatPercent: $("expenseVatPercent"),
+    expenseVatAmount: $("expenseVatAmount"),
+    expenseTotal: $("expenseTotal"),
+    expenseDeductible: $("expenseDeductible"),
+    expenseNotes: $("expenseNotes"),
+    expenseFilterYear: $("expenseFilterYear"),
+    expenseFilterQuarter: $("expenseFilterQuarter"),
+    expenseFilterCategory: $("expenseFilterCategory"),
+    expenseFilterDeductible: $("expenseFilterDeductible"),
+    expenseList: $("expenseList"),
+    expenseListEmpty: $("expenseListEmpty"),
+    expenseListCount: $("expenseListCount"),
     searchTabButtons: [...document.querySelectorAll("#panelSearch [data-searchtab]")],
   };
 
@@ -311,6 +355,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       attachments: false,
       registry: false,
       accounting: false,
+      fiscal: false,
     },
 
     currentPanel: "home",
@@ -325,6 +370,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     attachmentsByCustomerId: new Map(),
     transactions: [],
     transactionItemsByTxId: new Map(),
+    expenses: [],
 
     currentCustomerId: null,
     currentDetailCustomerId: null,
@@ -352,6 +398,15 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       kind: "ticket",
     },
 
+    fiscal: {
+      year: new Date().getFullYear(),
+      quarter: getQuarterByMonth(new Date().getMonth()),
+    },
+
+    expensesUi: {
+      editingId: null,
+    },
+
     selectedUploadFile: null,
 
     offline: {
@@ -363,6 +418,13 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       byTxId: new Map(),
       counters: {},
     },
+
+    autoRefresh: {
+      timer: null,
+      running: false,
+      lastAt: 0,
+      intervalMs: 45000,
+    },
   };
 
   // =========================================
@@ -372,6 +434,8 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     "home",
     "registry",
     "accounting",
+    "fiscal",
+    "expenses",
     "create",
     "search",
     "detail",
@@ -381,6 +445,8 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     home: els.panelHome,
     registry: els.panelRegistry,
     accounting: els.panelAccounting,
+    fiscal: els.panelFiscal,
+    expenses: els.panelExpenses,
     create: els.panelCreate,
     search: els.panelSearch,
     detail: els.panelDetail,
@@ -433,6 +499,10 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       renderHomeStats();
     } else if (panelName === "detail") {
       renderDetailPanel();
+    } else if (panelName === "fiscal") {
+      renderFiscalPanel().catch(console.error);
+    } else if (panelName === "expenses") {
+      renderExpensesPanel().catch(console.error);
     }
   }
 
@@ -465,6 +535,10 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       renderHomeStats();
     } else if (panelName === "detail") {
       renderDetailPanel();
+    } else if (panelName === "fiscal") {
+      renderFiscalPanel().catch(console.error);
+    } else if (panelName === "expenses") {
+      renderExpensesPanel().catch(console.error);
     }
   }
 
@@ -754,6 +828,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       els.loginPassword.value = "";
 
     navigateTo("home");
+    startAutoRefreshLoop();
     showToast("Sesión iniciada correctamente.", "success");
     } catch (error) {
       console.error(error);
@@ -774,6 +849,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       console.warn("Error al cerrar sesión:", error);
     }
 
+    stopAutoRefreshLoop();
     state.session = null;
     state.user = null;
     updateSessionUI();
@@ -791,9 +867,11 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       state.authReady = true;
       navigateTo("home", { pushHistory: false });
       await bootstrapDataAfterAuth();
+      startAutoRefreshLoop();
     }
   } catch (error) {
     console.warn("No se pudo recuperar la sesión a tiempo:", error);
+    stopAutoRefreshLoop();
     state.session = null;
     state.user = null;
     state.authReady = false;
@@ -905,6 +983,282 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     }
   }
 
+  async function fetchExpenses() {
+    state.loading.fiscal = true;
+
+    try {
+      const { data, error } = await withTimeout(
+        supabase
+          .from("expenses")
+          .select("*")
+          .order("fecha", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(2000),
+        15000
+      );
+
+      if (error) throw error;
+      state.expenses = uniqueBy(safeArray(data), (row) => row.id);
+    } catch (error) {
+      console.error("No se pudieron cargar los gastos:", error);
+      state.expenses = [];
+    } finally {
+      state.loading.fiscal = false;
+    }
+  }
+
+  async function ensureExpensesLoaded() {
+    if (!state.expenses.length && navigator.onLine) {
+      await fetchExpenses();
+    }
+  }
+
+  async function renderFiscalPanel() {
+    const fiscalCore = window.FiscalCore;
+    const fiscalUI = window.FiscalUI;
+
+    if (!fiscalCore || !fiscalUI || !els.fiscalCardsCurrentQuarter || !els.fiscalCardsSelectedQuarter) {
+      return;
+    }
+
+    await ensureTransactionsLoaded();
+    await ensureExpensesLoaded();
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentQuarter = getQuarterByMonth(now.getMonth());
+
+    if (!normalize(els.fiscalFilterYear?.value)) {
+      els.fiscalFilterYear.value = String(state.fiscal.year || currentYear);
+    }
+    if (!normalize(els.fiscalFilterQuarter?.value)) {
+      els.fiscalFilterQuarter.value = String(state.fiscal.quarter || currentQuarter);
+    }
+
+    state.fiscal.year = Number(normalize(els.fiscalFilterYear?.value) || currentYear);
+    state.fiscal.quarter = Number(normalize(els.fiscalFilterQuarter?.value) || currentQuarter);
+
+    const summaryViews = fiscalCore.calculateFiscalSummaryViews({
+      transactions: state.transactions,
+      expenses: state.expenses,
+      selectedYear: state.fiscal.year,
+      selectedQuarter: state.fiscal.quarter,
+      now,
+    });
+
+    setText(els.fiscalQuarterLabel, `Actual T${summaryViews.currentQuarter.quarter} ${summaryViews.currentQuarter.year} · Selección T${summaryViews.selectedQuarter.quarter} ${summaryViews.selectedQuarter.year}`);
+
+    setHTML(els.fiscalCardsCurrentQuarter, fiscalUI.buildFiscalCardsHTML(summaryViews.currentQuarter, euro));
+    setHTML(els.fiscalCardsSelectedQuarter, fiscalUI.buildFiscalCardsHTML(summaryViews.selectedQuarter, euro));
+
+    setHTML(els.fiscalTicketAggregateInfoCurrent, fiscalUI.buildTicketAggregateLineHTML(summaryViews.currentQuarter, euro));
+    setHTML(els.fiscalTicketAggregateInfoSelected, fiscalUI.buildTicketAggregateLineHTML(summaryViews.selectedQuarter, euro));
+
+    setHTML(els.fiscalYearAccumulatedCurrent, fiscalUI.buildYearAccumulatedHTML(summaryViews.currentYear, euro));
+    setHTML(els.fiscalYearAccumulatedSelected, fiscalUI.buildYearAccumulatedHTML(summaryViews.selectedYear, euro));
+
+    setHTML(els.fiscalQuarterSummaryTable, fiscalUI.buildFiscalCompareTableHTML({
+      leftLabel: `Actual T${summaryViews.currentQuarter.quarter} ${summaryViews.currentQuarter.year}`,
+      left: summaryViews.currentQuarter,
+      rightLabel: `Seleccionado T${summaryViews.selectedQuarter.quarter} ${summaryViews.selectedQuarter.year}`,
+      right: summaryViews.selectedQuarter,
+      moneyFormatter: euro,
+      mode: 'quarter',
+    }));
+
+    setHTML(els.fiscalYearSummaryTable, fiscalUI.buildFiscalCompareTableHTML({
+      leftLabel: `Ejercicio actual ${summaryViews.currentYear.year}`,
+      left: summaryViews.currentYear,
+      rightLabel: `Ejercicio seleccionado ${summaryViews.selectedYear.year}`,
+      right: summaryViews.selectedYear,
+      moneyFormatter: euro,
+      mode: 'year',
+    }));
+  }
+
+  function resetExpenseForm({ keepOpen = false } = {}) {
+    state.expensesUi.editingId = null;
+    if (els.expenseFormBox && !keepOpen) hide(els.expenseFormBox);
+    if (els.expenseFormBox && keepOpen) show(els.expenseFormBox);
+    if (els.expenseFormTitle) setText(els.expenseFormTitle, "Nuevo gasto");
+    if (els.expenseDate) els.expenseDate.value = todayISO();
+    if (els.expenseConcept) els.expenseConcept.value = "";
+    if (els.expenseCategory) els.expenseCategory.value = "";
+    if (els.expenseProvider) els.expenseProvider.value = "";
+    if (els.expenseBase) els.expenseBase.value = "";
+    if (els.expenseVatPercent) els.expenseVatPercent.value = "";
+    if (els.expenseVatAmount) els.expenseVatAmount.value = "";
+    if (els.expenseTotal) els.expenseTotal.value = "";
+    if (els.expenseDeductible) els.expenseDeductible.checked = false;
+    if (els.expenseNotes) els.expenseNotes.value = "";
+    hide(els.btnExpenseDelete);
+    setInlineMessage(els.expenseMsg, "");
+  }
+
+  function getExpenseFilters() {
+    return {
+      year: normalize(els.expenseFilterYear?.value),
+      quarter: normalize(els.expenseFilterQuarter?.value),
+      category: normalizeLower(els.expenseFilterCategory?.value),
+      deductible: normalize(els.expenseFilterDeductible?.value),
+    };
+  }
+
+  function filterExpensesRows() {
+    const { year, quarter, category, deductible } = getExpenseFilters();
+    return state.expenses.filter((exp) => {
+      const fecha = String(exp.fecha || "");
+      if (year && !fecha.startsWith(`${year}-`)) return false;
+      if (quarter) {
+        const d = parseISODate(fecha);
+        if (!d || String(getQuarterByMonth(d.getMonth())) !== String(quarter)) return false;
+      }
+      if (category && !normalizeLower(exp.categoria).includes(category)) return false;
+      if (deductible === "true" && !exp.deducible) return false;
+      if (deductible === "false" && !!exp.deducible) return false;
+      return true;
+    }).sort((a,b)=>String(b.fecha||"").localeCompare(String(a.fecha||"")));
+  }
+
+  function renderExpensesList() {
+    if (!els.expenseList) return;
+    const rows = filterExpensesRows();
+    setText(els.expenseListCount, `${rows.length} resultados`);
+
+    if (!rows.length) {
+      setHTML(els.expenseList, "");
+      show(els.expenseListEmpty);
+      return;
+    }
+
+    hide(els.expenseListEmpty);
+    setHTML(
+      els.expenseList,
+      rows.map((exp) => `
+        <article class="list-item">
+          <div class="list-item-main">
+            <div class="list-item-title">${escapeHtml(exp.concepto || "Sin concepto")}</div>
+            <div class="list-item-subtitle">${escapeHtml(formatDate(exp.fecha))} · ${escapeHtml(exp.categoria || "Sin categoría")} · ${escapeHtml(exp.proveedor || "Sin proveedor")}</div>
+            <div class="list-item-meta">
+              <span class="pill">Base ${escapeHtml(euro(exp.base_imponible || 0))}</span>
+              <span class="pill">IVA ${escapeHtml(euro(exp.iva_importe || 0))}</span>
+              <span class="pill success">Total ${escapeHtml(euro(exp.total || 0))}</span>
+              <span class="pill ${exp.deducible ? "success" : "warning"}">${exp.deducible ? "Deducible" : "No deducible"}</span>
+            </div>
+          </div>
+          <div class="list-item-actions">
+            <button class="btn btn-primary" type="button" data-edit-expense="${escapeHtml(String(exp.id))}">Editar</button>
+            <button class="btn btn-danger" type="button" data-delete-expense="${escapeHtml(String(exp.id))}">Eliminar</button>
+          </div>
+        </article>
+      `).join("")
+    );
+  }
+
+  function fillExpenseForm(id) {
+    const exp = state.expenses.find((x) => String(x.id) === String(id));
+    if (!exp) return;
+    state.expensesUi.editingId = exp.id;
+    show(els.expenseFormBox);
+    setText(els.expenseFormTitle, "Editar gasto");
+    show(els.btnExpenseDelete);
+    if (els.expenseDate) els.expenseDate.value = exp.fecha || todayISO();
+    if (els.expenseConcept) els.expenseConcept.value = exp.concepto || "";
+    if (els.expenseCategory) els.expenseCategory.value = exp.categoria || "";
+    if (els.expenseProvider) els.expenseProvider.value = exp.proveedor || "";
+    if (els.expenseBase) els.expenseBase.value = exp.base_imponible ?? "";
+    if (els.expenseVatPercent) els.expenseVatPercent.value = exp.iva_porcentaje ?? "";
+    if (els.expenseVatAmount) els.expenseVatAmount.value = exp.iva_importe ?? "";
+    if (els.expenseTotal) els.expenseTotal.value = exp.total ?? "";
+    if (els.expenseDeductible) els.expenseDeductible.checked = !!exp.deducible;
+    if (els.expenseNotes) els.expenseNotes.value = exp.notas || "";
+    setInlineMessage(els.expenseMsg, "");
+  }
+
+  function collectExpensePayload() {
+    return {
+      fecha: normalize(els.expenseDate?.value) || todayISO(),
+      concepto: normalize(els.expenseConcept?.value),
+      categoria: normalize(els.expenseCategory?.value) || null,
+      proveedor: normalize(els.expenseProvider?.value) || null,
+      base_imponible: clampMoney(els.expenseBase?.value || 0),
+      iva_porcentaje: clampMoney(els.expenseVatPercent?.value || 0),
+      iva_importe: clampMoney(els.expenseVatAmount?.value || 0),
+      total: clampMoney(els.expenseTotal?.value || 0),
+      deducible: !!els.expenseDeductible?.checked,
+      notas: normalize(els.expenseNotes?.value) || null,
+    };
+  }
+
+  function validateExpensePayload(payload) {
+    if (!payload.fecha) return "La fecha es obligatoria.";
+    if (!payload.concepto) return "El concepto es obligatorio.";
+    return "";
+  }
+
+  async function saveExpenseForm() {
+    const payload = collectExpensePayload();
+    const validationError = validateExpensePayload(payload);
+    if (validationError) {
+      setInlineMessage(els.expenseMsg, validationError, "error");
+      return;
+    }
+
+    const editingId = state.expensesUi.editingId;
+    setDisabled(els.btnExpenseSave, true);
+    setInlineMessage(els.expenseMsg, "Guardando...", "muted");
+
+    try {
+      if (!editingId) {
+        const { error } = await withTimeout(supabase.from("expenses").insert(payload), 12000);
+        if (error) throw error;
+      } else {
+        const { error } = await withTimeout(
+          supabase.from("expenses").update(payload).eq("id", editingId),
+          12000
+        );
+        if (error) throw error;
+      }
+
+      await fetchExpenses();
+      renderExpensesList();
+      renderFiscalPanel().catch(console.error);
+      resetExpenseForm({ keepOpen: false });
+      showToast("Gasto guardado correctamente.", "success");
+    } catch (error) {
+      console.error(error);
+      setInlineMessage(els.expenseMsg, error?.message || "No se pudo guardar el gasto.", "error");
+    } finally {
+      setDisabled(els.btnExpenseSave, false);
+    }
+  }
+
+  async function deleteExpense(id = null) {
+    const expenseId = id || state.expensesUi.editingId;
+    if (!expenseId) return;
+    const exp = state.expenses.find((x) => String(x.id) === String(expenseId));
+    const confirmed = window.confirm(`¿Eliminar gasto ${exp?.concepto || "seleccionado"}?`);
+    if (!confirmed) return;
+
+    try {
+      const { error } = await withTimeout(supabase.from("expenses").delete().eq("id", expenseId), 12000);
+      if (error) throw error;
+      await fetchExpenses();
+      renderExpensesList();
+      renderFiscalPanel().catch(console.error);
+      resetExpenseForm({ keepOpen: false });
+      showToast("Gasto eliminado.", "success");
+    } catch (error) {
+      console.error(error);
+      showToast(error?.message || "No se pudo eliminar el gasto.", "error");
+    }
+  }
+
+  async function renderExpensesPanel() {
+    await ensureExpensesLoaded();
+    renderExpensesList();
+  }
+
   async function bootstrapDataAfterAuth() {
   if (state.isBootstrapping) return;
   state.isBootstrapping = true;
@@ -913,6 +1267,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     await Promise.all([
       fetchCustomersAndCompanies(),
       fetchTransactionsBase(),
+      fetchExpenses(),
     ]);
 
     renderAllCoreViews();
@@ -931,6 +1286,90 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     renderCompaniesList();
     renderDetailPanel();
     renderClientHistory();
+    renderFiscalPanel().catch(console.error);
+  }
+
+  function withPreservedScroll(listEl, fn) {
+    const previous = listEl ? listEl.scrollTop : 0;
+    fn();
+    if (listEl) {
+      listEl.scrollTop = previous;
+    }
+  }
+
+  async function refreshMainData({ reason = "manual", silent = false } = {}) {
+    if (!state.session || state.autoRefresh.running) return;
+
+    const now = Date.now();
+    if (reason === "interval" && now - state.autoRefresh.lastAt < 12000) {
+      return;
+    }
+
+    state.autoRefresh.running = true;
+
+    try {
+      await Promise.all([
+        fetchCustomersAndCompanies(),
+        fetchTransactionsFull(),
+        fetchExpenses(),
+      ]);
+
+      if (state.currentDetailCustomerId) {
+        await fetchAttachmentsForCustomer(state.currentDetailCustomerId).catch(console.error);
+      }
+
+      withPreservedScroll(els.txList, () => {
+        renderRegistryList();
+      });
+
+      withPreservedScroll(els.clientHistoryList, () => {
+        renderClientHistory();
+      });
+
+      withPreservedScroll(els.attachmentsList, () => {
+        renderAttachments();
+      });
+
+      withPreservedScroll(els.expenseList, () => {
+        renderExpensesList();
+      });
+
+      renderDetailPanel();
+      renderPendingRecords();
+      renderHomeStats();
+      renderAccountingYearOptions();
+      renderAccountingView();
+      await renderFiscalPanel().catch(console.error);
+
+      state.autoRefresh.lastAt = Date.now();
+
+      if (!silent) {
+        showToast("Datos actualizados.", "success", 1200);
+      }
+    } catch (error) {
+      console.error("Refresh principal falló:", error);
+      if (!silent) {
+        showToast("No se pudo actualizar en este momento.", "warning", 1800);
+      }
+    } finally {
+      state.autoRefresh.running = false;
+    }
+  }
+
+  function startAutoRefreshLoop() {
+    stopAutoRefreshLoop();
+
+    state.autoRefresh.timer = setInterval(() => {
+      if (!navigator.onLine || document.hidden) return;
+      refreshMainData({ reason: "interval", silent: true }).catch(console.error);
+    }, state.autoRefresh.intervalMs);
+  }
+
+  function stopAutoRefreshLoop() {
+    if (state.autoRefresh.timer) {
+      clearInterval(state.autoRefresh.timer);
+      state.autoRefresh.timer = null;
+    }
   }
 
   // =========================================
@@ -1483,6 +1922,7 @@ async function deleteCurrentCustomer() {
     navigateTo("detail");
     renderDetailPanel();
     renderClientHistory();
+    renderFiscalPanel().catch(console.error);
     fetchAttachmentsForCustomer(customerId)
       .then(() => renderAttachments())
       .catch((error) => {
@@ -1918,6 +2358,16 @@ async function deleteCurrentCustomer() {
       return;
     }
 
+    if (target.dataset.editExpense) {
+      fillExpenseForm(target.dataset.editExpense);
+      return;
+    }
+
+    if (target.dataset.deleteExpense) {
+      deleteExpense(target.dataset.deleteExpense).catch(console.error);
+      return;
+    }
+
     if (target.dataset.openRegistryTx) {
       // La apertura exacta del registro se termina en la PARTE 2.
       navigateTo("registry");
@@ -2029,9 +2479,22 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     window.addEventListener("online", async () => {
       updateNetStatusUI();
       await syncOfflineQueue().catch(console.error);
+      await refreshMainData({ reason: "online", silent: true }).catch(console.error);
     });
 
     window.addEventListener("offline", updateNetStatusUI);
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && state.session) {
+        refreshMainData({ reason: "visibility", silent: true }).catch(console.error);
+      }
+    });
+
+    window.addEventListener("focus", () => {
+      if (state.session) {
+        refreshMainData({ reason: "focus", silent: true }).catch(console.error);
+      }
+    });
 
     supabase.auth.onAuthStateChange((event, session) => {
   state.session = session || null;
@@ -2040,6 +2503,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
   if (event === "SIGNED_OUT") {
     state.authReady = false;
+    stopAutoRefreshLoop();
     return;
   }
 
@@ -2058,9 +2522,13 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
   state.authReady = true;
 
   queueMicrotask(() => {
-    bootstrapDataAfterAuth().catch((error) => {
-      console.error("Error cargando datos tras recuperar sesión:", error);
-    });
+    bootstrapDataAfterAuth()
+      .then(() => {
+        startAutoRefreshLoop();
+      })
+      .catch((error) => {
+        console.error("Error cargando datos tras recuperar sesión:", error);
+      });
   });
 });
   }
@@ -2440,6 +2908,247 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       .map((item) => normalize(item.concept))
       .filter(Boolean)
       .join(" · ");
+  }
+
+  async function createAndAttachTransactionPdf(tx) {
+    const txPdfService = window.TxPdfService;
+    const jspdfCtor = window.jspdf?.jsPDF;
+
+    if (!tx || !tx.id || !tx.customer_id || !txPdfService || !jspdfCtor) {
+      return null;
+    }
+
+    let customer = state.customerMap.get(tx.customer_id) || null;
+    let company = state.companyMapByCustomerId.get(tx.customer_id) || null;
+    let items = state.transactionItemsByTxId.get(tx.id) || [];
+
+    if (!customer) {
+      const { data, error } = await withTimeout(
+        supabase.from("customers").select("*").eq("id", tx.customer_id).maybeSingle(),
+        12000
+      );
+      if (!error && data) customer = data;
+    }
+
+    if (!company && tx.customer_id) {
+      const { data, error } = await withTimeout(
+        supabase.from("companies").select("*").eq("customer_id", tx.customer_id).maybeSingle(),
+        12000
+      );
+      if (!error && data) company = data;
+    }
+
+    if (!items.length) {
+      const { data, error } = await withTimeout(
+        supabase
+          .from("transaction_items")
+          .select("*")
+          .eq("transaction_id", tx.id)
+          .order("created_at", { ascending: true }),
+        12000
+      );
+      if (!error) {
+        items = safeArray(data);
+        state.transactionItemsByTxId.set(tx.id, items);
+      }
+    }
+
+    const incidences = [];
+    if (!customer) incidences.push("missing_customer");
+    if ((customer?.is_company || tx.kind === "factura") && !company) incidences.push("missing_company");
+    if (!items.length) incidences.push("missing_items");
+
+    if (incidences.length) {
+      console.warn("[tx-pdf-backfill] incidencia de datos incompletos para PDF", {
+        txId: tx.id,
+        incidences,
+      });
+    }
+
+    const txCode = getTransactionCode(tx);
+
+    const data = txPdfService.buildPdfData({
+      tx,
+      items,
+      customer,
+      company,
+      txCode,
+    });
+
+    const doc = txPdfService.renderPdfToJsPdf(data, jspdfCtor);
+    const blob = doc.output("blob");
+    const fileName = txPdfService.buildTxPdfFileName({
+      txId: tx.id,
+      kind: tx.kind,
+      txDate: tx.tx_date,
+    });
+    const filePath = `transactions/${tx.id}/${Date.now()}_${fileName}`;
+
+    const { error: uploadError } = await withTimeout(
+      supabase.storage.from(STORAGE_BUCKET).upload(filePath, blob, {
+        upsert: true,
+        contentType: "application/pdf",
+      }),
+      25000
+    );
+    if (uploadError) throw uploadError;
+
+    const baseAttachmentPayload = {
+      customer_id: tx.customer_id,
+      file_name: fileName,
+      file_path: filePath,
+      mime_type: "application/pdf",
+    };
+
+    const payloadWithTx = {
+      ...baseAttachmentPayload,
+      transaction_id: tx.id,
+    };
+
+    let inserted = false;
+    let lastError = null;
+
+    for (const payload of [payloadWithTx, baseAttachmentPayload]) {
+      const { error } = await withTimeout(supabase.from("attachments").insert(payload), 12000);
+      if (!error) {
+        inserted = true;
+        break;
+      }
+      lastError = error;
+    }
+
+    if (!inserted && lastError) throw lastError;
+
+    return { fileName, filePath };
+  }
+
+  async function findTransactionPdfAttachment(txId, txHint = null) {
+    if (!txId) return null;
+
+    const { data: rowsByTx, error: byTxError } = await withTimeout(
+      supabase
+        .from("attachments")
+        .select("*")
+        .eq("transaction_id", txId)
+        .order("created_at", { ascending: false })
+        .limit(1),
+      12000
+    );
+
+    if (!byTxError && safeArray(rowsByTx).length) {
+      return rowsByTx[0];
+    }
+
+    const tx = txHint || state.transactions.find((row) => row.id === txId) || null;
+    if (!tx?.customer_id) return null;
+
+    const { data: rowsByName, error: byNameError } = await withTimeout(
+      supabase
+        .from("attachments")
+        .select("*")
+        .eq("customer_id", tx.customer_id)
+        .ilike("file_name", `TX-${txId}-%`)
+        .order("created_at", { ascending: false })
+        .limit(1),
+      12000
+    );
+
+    if (byNameError) throw byNameError;
+    return safeArray(rowsByName)[0] || null;
+  }
+
+  async function openTransactionPdf(txId) {
+    try {
+      const attachment = await findTransactionPdfAttachment(txId);
+      if (!attachment?.file_path) {
+        showToast("Este registro aún no tiene PDF asociado.", "warning");
+        return;
+      }
+
+      const { data, error } = await withTimeout(
+        supabase.storage.from(STORAGE_BUCKET).createSignedUrl(attachment.file_path, 120),
+        12000
+      );
+
+      if (error) throw error;
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (error) {
+      console.error(error);
+      showToast("No se pudo abrir el PDF del registro.", "error");
+    }
+  }
+
+
+  async function backfillMissingTransactionPdfsManual(options = {}) {
+    const batchSize = Math.max(1, Number(options.batchSize || 20));
+    const maxBatches = Math.max(1, Number(options.maxBatches || 20));
+    const dryRun = !!options.dryRun;
+    let offset = Math.max(0, Number(options.startOffset || 0));
+
+    const summary = {
+      scanned: 0,
+      generated: 0,
+      skippedExisting: 0,
+      failed: 0,
+      dryRun,
+      nextOffset: offset,
+    };
+
+    for (let b = 0; b < maxBatches; b += 1) {
+      const { data, error } = await withTimeout(
+        supabase
+          .from("transactions")
+          .select("*")
+          .order("created_at", { ascending: true })
+          .range(offset, offset + batchSize - 1),
+        20000
+      );
+
+      if (error) throw error;
+
+      const rows = safeArray(data);
+      if (!rows.length) break;
+
+      console.info("[tx-pdf-backfill] batch", { batch: b + 1, offset, size: rows.length });
+
+      for (const tx of rows) {
+        summary.scanned += 1;
+        try {
+          const existing = await findTransactionPdfAttachment(tx.id, tx);
+          if (existing) {
+            summary.skippedExisting += 1;
+            console.info("[tx-pdf-backfill] skip-existing", { txId: tx.id });
+            continue;
+          }
+
+          if (dryRun) {
+            summary.generated += 1;
+            console.info("[tx-pdf-backfill] dry-run-generate", { txId: tx.id });
+            continue;
+          }
+
+          await createAndAttachTransactionPdf(tx);
+          summary.generated += 1;
+          console.info("[tx-pdf-backfill] generated", { txId: tx.id });
+        } catch (err) {
+          summary.failed += 1;
+          console.error("[tx-pdf-backfill] failed", {
+            txId: tx?.id,
+            error: err?.message || String(err),
+          });
+        }
+      }
+
+      offset += rows.length;
+      summary.nextOffset = offset;
+
+      if (rows.length < batchSize) break;
+    }
+
+    console.info("[tx-pdf-backfill] summary", summary);
+    return summary;
   }
 
   function compareTransactionsByCodeAsc(a, b, codeByTxId = new Map()) {
@@ -2872,6 +3581,30 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         if (insertItemsError) throw insertItemsError;
       }
 
+      if (!editingTxId) {
+        const txForPdf = {
+          id: txId,
+          ...txPayload,
+          created_at: new Date().toISOString(),
+        };
+        state.transactionItemsByTxId.set(
+          txId,
+          itemsPayload.map((item) => ({ concept: item.concept, amount: clampMoney(item.amount) }))
+        );
+
+        createAndAttachTransactionPdf(txForPdf)
+          .then(async () => {
+            if (state.currentDetailCustomerId === txPayload.customer_id) {
+              await fetchAttachmentsForCustomer(txPayload.customer_id);
+              renderAttachments();
+            }
+          })
+          .catch((pdfError) => {
+            console.error(pdfError);
+            showToast("Registro guardado, pero no se pudo generar el PDF automático.", "warning", 4500);
+          });
+      }
+
       await fetchTransactionsFull();
       renderRegistryList();
       renderPendingRecords();
@@ -2879,6 +3612,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       renderClientHistory();
       renderAccountingYearOptions();
       renderAccountingView();
+      renderFiscalPanel().catch(console.error);
 
       resetTxForm({ keepKind: true, keepOpen: false });
       showToast("Registro guardado correctamente.", "success");
@@ -2930,6 +3664,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         renderClientHistory();
         renderAccountingYearOptions();
         renderAccountingView();
+      renderFiscalPanel().catch(console.error);
 
         resetTxForm({ keepKind: true, keepOpen: false });
         await updateOfflineCounter();
@@ -2951,6 +3686,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       renderClientHistory();
       renderAccountingYearOptions();
       renderAccountingView();
+      renderFiscalPanel().catch(console.error);
 
       resetTxForm({ keepKind: true, keepOpen: false });
       showToast("Registro eliminado correctamente.", "success");
@@ -3157,6 +3893,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
                 <button class="btn btn-ghost" type="button" data-open-tx="${escapeHtml(tx.id)}">Abrir</button>
                 <button class="btn btn-primary" type="button" data-edit-tx="${escapeHtml(tx.id)}">Editar</button>
                 <button class="btn btn-danger" type="button" data-delete-tx="${escapeHtml(tx.id)}">Eliminar</button>
+                <button class="btn btn-ghost" type="button" data-open-tx-pdf="${escapeHtml(tx.id)}">PDF</button>
               </div>
             </article>
           `;
@@ -3401,6 +4138,12 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       const deleteTxId = button.dataset.deleteTx;
       if (deleteTxId) {
         deleteTransaction(deleteTxId).catch(console.error);
+        return;
+      }
+
+      const openTxPdfId = button.dataset.openTxPdf;
+      if (openTxPdfId) {
+        openTransactionPdf(openTxPdfId).catch(console.error);
       }
     });
   }
@@ -3436,6 +4179,9 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     } else if (panelName === "accounting") {
       renderAccountingYearOptions();
       renderAccountingView();
+      renderFiscalPanel().catch(console.error);
+    } else if (panelName === "expenses") {
+      renderExpensesPanel().catch(console.error);
     }
   };
 
@@ -3451,11 +4197,16 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       renderHomeStats();
     } else if (panelName === "detail") {
       renderDetailPanel();
+    } else if (panelName === "fiscal") {
+      renderFiscalPanel().catch(console.error);
+    } else if (panelName === "expenses") {
+      renderExpensesPanel().catch(console.error);
     } else if (panelName === "registry") {
       openRegistryPanel().catch(console.error);
     } else if (panelName === "accounting") {
       renderAccountingYearOptions();
       renderAccountingView();
+      renderFiscalPanel().catch(console.error);
     }
   };
 
@@ -3508,6 +4259,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     els.accountingYear?.addEventListener("change", () => {
       state.accounting.year = normalize(els.accountingYear.value);
       renderAccountingView();
+      renderFiscalPanel().catch(console.error);
     });
 
     els.btnNewTx?.addEventListener("click", () => {
@@ -3545,6 +4297,56 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     els.btnAccountingExportPdf?.addEventListener("click", () => {
       exportAccountingQuarterPdf();
     });
+
+    els.btnFiscalRefresh?.addEventListener("click", () => {
+      refreshMainData({ reason: "manual-fiscal", silent: true }).catch(console.error);
+    });
+
+    [els.fiscalFilterYear, els.fiscalFilterQuarter]
+      .filter(Boolean)
+      .forEach((inputEl) => {
+        const eventName = inputEl.tagName === "SELECT" ? "change" : "input";
+        inputEl.addEventListener(eventName, () => {
+          renderFiscalPanel().catch(console.error);
+        });
+      });
+
+    els.btnRegistryRefresh?.addEventListener("click", () => {
+      refreshMainData({ reason: "manual-registry", silent: false }).catch(console.error);
+    });
+
+    els.btnDetailRefresh?.addEventListener("click", () => {
+      refreshMainData({ reason: "manual-detail", silent: false }).catch(console.error);
+    });
+
+    els.btnExpenseNew?.addEventListener("click", () => {
+      resetExpenseForm({ keepOpen: true });
+    });
+
+    els.btnExpenseCancel?.addEventListener("click", () => {
+      resetExpenseForm({ keepOpen: false });
+    });
+
+    els.btnExpenseReset?.addEventListener("click", () => {
+      resetExpenseForm({ keepOpen: true });
+    });
+
+    els.btnExpenseSave?.addEventListener("click", () => {
+      saveExpenseForm().catch(console.error);
+    });
+
+    els.btnExpenseDelete?.addEventListener("click", () => {
+      deleteExpense().catch(console.error);
+    });
+
+    [els.expenseFilterYear, els.expenseFilterQuarter, els.expenseFilterCategory, els.expenseFilterDeductible]
+      .filter(Boolean)
+      .forEach((inputEl) => {
+        const eventName = inputEl.tagName === "SELECT" ? "change" : "input";
+        inputEl.addEventListener(eventName, () => {
+          renderExpensesList();
+        });
+      });
 
     els.searchTabButtons.forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -3594,10 +4396,11 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     state.isBootstrapping = true;
 
     try {
-      await Promise.all([fetchCustomersAndCompanies(), fetchTransactionsFull()]);
+      await Promise.all([fetchCustomersAndCompanies(), fetchTransactionsFull(), fetchExpenses()]);
       renderAllCoreViews();
       renderAccountingYearOptions();
       renderAccountingView();
+      renderFiscalPanel().catch(console.error);
       await updateOfflineCounter();
       await syncOfflineQueue().catch(console.error);
     } finally {
@@ -3844,6 +4647,10 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
   // =========================================
   // FINALIZE INIT
   // =========================================
+  window.AppManualJobs = {
+    backfillMissingTransactionPdfs: backfillMissingTransactionPdfsManual,
+  };
+
   bindPart2Events();
   loadTxCodeRegistry();
   setRegistryKind("ticket");
