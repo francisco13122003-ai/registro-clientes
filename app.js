@@ -2760,6 +2760,132 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       .join(" · ");
   }
 
+  async function createAndAttachTransactionPdf(tx) {
+    const txPdfService = window.TxPdfService;
+    const jspdfCtor = window.jspdf?.jsPDF;
+
+    if (!tx || !tx.id || !tx.customer_id || !txPdfService || !jspdfCtor) {
+      return null;
+    }
+
+    const customer = state.customerMap.get(tx.customer_id) || null;
+    const company = state.companyMapByCustomerId.get(tx.customer_id) || null;
+    const items = state.transactionItemsByTxId.get(tx.id) || [];
+    const txCode = getTransactionCode(tx);
+
+    const data = txPdfService.buildPdfData({
+      tx,
+      items,
+      customer,
+      company,
+      txCode,
+    });
+
+    const doc = txPdfService.renderPdfToJsPdf(data, jspdfCtor);
+    const blob = doc.output("blob");
+    const fileName = txPdfService.buildTxPdfFileName({
+      txId: tx.id,
+      kind: tx.kind,
+      txDate: tx.tx_date,
+    });
+    const filePath = `transactions/${tx.id}/${Date.now()}_${fileName}`;
+
+    const { error: uploadError } = await withTimeout(
+      supabase.storage.from(STORAGE_BUCKET).upload(filePath, blob, {
+        upsert: true,
+        contentType: "application/pdf",
+      }),
+      25000
+    );
+    if (uploadError) throw uploadError;
+
+    const baseAttachmentPayload = {
+      customer_id: tx.customer_id,
+      file_name: fileName,
+      file_path: filePath,
+      mime_type: "application/pdf",
+    };
+
+    const payloadWithTx = {
+      ...baseAttachmentPayload,
+      transaction_id: tx.id,
+    };
+
+    let inserted = false;
+    let lastError = null;
+
+    for (const payload of [payloadWithTx, baseAttachmentPayload]) {
+      const { error } = await withTimeout(supabase.from("attachments").insert(payload), 12000);
+      if (!error) {
+        inserted = true;
+        break;
+      }
+      lastError = error;
+    }
+
+    if (!inserted && lastError) throw lastError;
+
+    return { fileName, filePath };
+  }
+
+  async function findTransactionPdfAttachment(txId) {
+    if (!txId) return null;
+
+    const { data: rowsByTx, error: byTxError } = await withTimeout(
+      supabase
+        .from("attachments")
+        .select("*")
+        .eq("transaction_id", txId)
+        .order("created_at", { ascending: false })
+        .limit(1),
+      12000
+    );
+
+    if (!byTxError && safeArray(rowsByTx).length) {
+      return rowsByTx[0];
+    }
+
+    const tx = state.transactions.find((row) => row.id === txId) || null;
+    if (!tx?.customer_id) return null;
+
+    const { data: rowsByName, error: byNameError } = await withTimeout(
+      supabase
+        .from("attachments")
+        .select("*")
+        .eq("customer_id", tx.customer_id)
+        .ilike("file_name", `TX-${txId}-%`)
+        .order("created_at", { ascending: false })
+        .limit(1),
+      12000
+    );
+
+    if (byNameError) throw byNameError;
+    return safeArray(rowsByName)[0] || null;
+  }
+
+  async function openTransactionPdf(txId) {
+    try {
+      const attachment = await findTransactionPdfAttachment(txId);
+      if (!attachment?.file_path) {
+        showToast("Este registro aún no tiene PDF asociado.", "warning");
+        return;
+      }
+
+      const { data, error } = await withTimeout(
+        supabase.storage.from(STORAGE_BUCKET).createSignedUrl(attachment.file_path, 120),
+        12000
+      );
+
+      if (error) throw error;
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (error) {
+      console.error(error);
+      showToast("No se pudo abrir el PDF del registro.", "error");
+    }
+  }
+
   function compareTransactionsByCodeAsc(a, b, codeByTxId = new Map()) {
     const codeA = codeByTxId.get(a.id) || getTransactionCode(a);
     const codeB = codeByTxId.get(b.id) || getTransactionCode(b);
@@ -3190,6 +3316,30 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         if (insertItemsError) throw insertItemsError;
       }
 
+      if (!editingTxId) {
+        const txForPdf = {
+          id: txId,
+          ...txPayload,
+          created_at: new Date().toISOString(),
+        };
+        state.transactionItemsByTxId.set(
+          txId,
+          itemsPayload.map((item) => ({ concept: item.concept, amount: clampMoney(item.amount) }))
+        );
+
+        createAndAttachTransactionPdf(txForPdf)
+          .then(async () => {
+            if (state.currentDetailCustomerId === txPayload.customer_id) {
+              await fetchAttachmentsForCustomer(txPayload.customer_id);
+              renderAttachments();
+            }
+          })
+          .catch((pdfError) => {
+            console.error(pdfError);
+            showToast("Registro guardado, pero no se pudo generar el PDF automático.", "warning", 4500);
+          });
+      }
+
       await fetchTransactionsFull();
       renderRegistryList();
       renderPendingRecords();
@@ -3478,6 +3628,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
                 <button class="btn btn-ghost" type="button" data-open-tx="${escapeHtml(tx.id)}">Abrir</button>
                 <button class="btn btn-primary" type="button" data-edit-tx="${escapeHtml(tx.id)}">Editar</button>
                 <button class="btn btn-danger" type="button" data-delete-tx="${escapeHtml(tx.id)}">Eliminar</button>
+                <button class="btn btn-ghost" type="button" data-open-tx-pdf="${escapeHtml(tx.id)}">PDF</button>
               </div>
             </article>
           `;
@@ -3722,6 +3873,12 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       const deleteTxId = button.dataset.deleteTx;
       if (deleteTxId) {
         deleteTransaction(deleteTxId).catch(console.error);
+        return;
+      }
+
+      const openTxPdfId = button.dataset.openTxPdf;
+      if (openTxPdfId) {
+        openTransactionPdf(openTxPdfId).catch(console.error);
       }
     });
   }
