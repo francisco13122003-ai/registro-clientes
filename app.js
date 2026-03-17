@@ -2217,8 +2217,8 @@ async function deleteCurrentCustomer() {
       setText(
         els.clientHistorySortDirectionLabel,
         state.currentDetailHistorySortDescending
-          ? "más reciente a más antiguo"
-          : "más antiguo a más reciente"
+          ? "identificador más alto a más bajo"
+          : "identificador más bajo a más alto"
       );
     }
 
@@ -2235,8 +2235,12 @@ async function deleteCurrentCustomer() {
   }
 
   function getClientHistoryRowsSorted(customerId, kind) {
-    const rowsDesc = sortByDateDesc(getTransactionsForCustomer(customerId, kind), "tx_date");
-    return state.currentDetailHistorySortDescending ? rowsDesc : [...rowsDesc].reverse();
+    const rows = getTransactionsForCustomer(customerId, kind);
+    return [...rows].sort((a, b) => (
+      state.currentDetailHistorySortDescending
+        ? compareTransactionsByCodeDesc(a, b)
+        : compareTransactionsByCodeAsc(a, b)
+    ));
   }
 
   function renderClientHistory() {
@@ -2910,13 +2914,22 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       .join(" · ");
   }
 
-  async function createAndAttachTransactionPdf(tx) {
+  async function createAndAttachTransactionPdf(tx, options = {}) {
     const txPdfService = window.TxPdfService;
     const jspdfCtor = window.jspdf?.jsPDF;
 
     if (!tx || !tx.id || !tx.customer_id || !txPdfService || !jspdfCtor) {
       return null;
     }
+
+    // Flujo seguro de actualización (create/edit):
+    // - intentamos reutilizar el attachment existente del registro para evitar duplicados innecesarios;
+    // - subimos primero el nuevo PDF (upsert) y solo después actualizamos el attachment;
+    // - si falla la regeneración o el update, no se elimina ningún PDF previo.
+    const shouldRefreshExisting = !!options.refreshExisting;
+    const existingAttachment = shouldRefreshExisting
+      ? await findTransactionPdfAttachment(tx.id, tx).catch(() => null)
+      : null;
 
     let customer = state.customerMap.get(tx.customer_id) || null;
     let company = state.companyMapByCustomerId.get(tx.customer_id) || null;
@@ -2977,12 +2990,11 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
     const doc = txPdfService.renderPdfToJsPdf(data, jspdfCtor);
     const blob = doc.output("blob");
-    const fileName = txPdfService.buildTxPdfFileName({
-      txId: tx.id,
-      kind: tx.kind,
-      txDate: tx.tx_date,
-    });
-    const filePath = `transactions/${tx.id}/${Date.now()}_${fileName}`;
+    const fileName = txPdfService.buildTxPdfFileName({ txCode });
+
+    // El nombre físico/visible del PDF debe coincidir con el identificador del registro.
+    // Usamos una ruta estable por transacción para crear y para actualizar en edición.
+    const filePath = `transactions/${tx.id}/${fileName}`;
 
     const { error: uploadError } = await withTimeout(
       supabase.storage.from(STORAGE_BUCKET).upload(filePath, blob, {
@@ -3005,6 +3017,18 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       transaction_id: tx.id,
     };
 
+    if (existingAttachment?.id) {
+      const { error } = await withTimeout(
+        supabase
+          .from("attachments")
+          .update(payloadWithTx)
+          .eq("id", existingAttachment.id),
+        12000
+      );
+      if (error) throw error;
+      return { fileName, filePath, attachmentId: existingAttachment.id, updated: true };
+    }
+
     let inserted = false;
     let lastError = null;
 
@@ -3019,7 +3043,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
     if (!inserted && lastError) throw lastError;
 
-    return { fileName, filePath };
+    return { fileName, filePath, attachmentId: null, updated: false };
   }
 
   async function findTransactionPdfAttachment(txId, txHint = null) {
@@ -3151,32 +3175,43 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     return summary;
   }
 
+  function parseTxCodeSortParts(code) {
+    const normalized = normalizeTxCode(code);
+    const match = normalized.match(/^([A-Z]{2})-(\d+)-(\d{2})(?:-.+)?$/);
+    if (!match) {
+      return { prefix: "", seq: 0, year: 0, normalized };
+    }
+
+    return {
+      prefix: match[1],
+      seq: Number(match[2] || 0),
+      year: Number(match[3] || 0),
+      normalized,
+    };
+  }
+
   function compareTransactionsByCodeAsc(a, b, codeByTxId = new Map()) {
     const codeA = codeByTxId.get(a.id) || getTransactionCode(a);
     const codeB = codeByTxId.get(b.id) || getTransactionCode(b);
 
-    const seqA = Number(String(codeA).match(/^[A-Z]{2}-(\d{5})-\d{2}$/)?.[1] || 0);
-    const seqB = Number(String(codeB).match(/^[A-Z]{2}-(\d{5})-\d{2}$/)?.[1] || 0);
+    const partsA = parseTxCodeSortParts(codeA);
+    const partsB = parseTxCodeSortParts(codeB);
 
-    if (seqA !== seqB) return seqA - seqB;
-    return String(codeA).localeCompare(String(codeB));
+    if (partsA.year !== partsB.year) return partsA.year - partsB.year;
+    if (partsA.prefix !== partsB.prefix) return partsA.prefix.localeCompare(partsB.prefix);
+    if (partsA.seq !== partsB.seq) return partsA.seq - partsB.seq;
+
+    return partsA.normalized.localeCompare(partsB.normalized);
   }
 
-  function compareTransactionsForRegistryDesc(a, b) {
-    const createdA = new Date(a?.created_at || 0).getTime();
-    const createdB = new Date(b?.created_at || 0).getTime();
-    if (createdA !== createdB) return createdB - createdA;
-
-    const txDateA = new Date(a?.tx_date || 0).getTime();
-    const txDateB = new Date(b?.tx_date || 0).getTime();
-    if (txDateA !== txDateB) return txDateB - txDateA;
-
-    return String(b?.id || "").localeCompare(String(a?.id || ""));
+  function compareTransactionsByCodeDesc(a, b, codeByTxId = new Map()) {
+    return compareTransactionsByCodeAsc(a, b, codeByTxId) * -1;
   }
 
   function compareTransactionsForRegistry(a, b) {
-    const direction = state.registry.sortDescending ? 1 : -1;
-    return compareTransactionsForRegistryDesc(a, b) * direction;
+    return state.registry.sortDescending
+      ? compareTransactionsByCodeDesc(a, b)
+      : compareTransactionsByCodeAsc(a, b);
   }
 
   function updateRegistrySortDirectionUI() {
@@ -3184,8 +3219,8 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       setText(
         els.registrySortDirectionLabel,
         state.registry.sortDescending
-          ? "más reciente a más antiguo"
-          : "más antiguo a más reciente"
+          ? "identificador más alto a más bajo"
+          : "identificador más bajo a más alto"
       );
     }
 
@@ -3468,6 +3503,9 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
     const { txPayload, itemsPayload } = collectTxPayloadFromForm();
     const editingTxId = state.registry.editingTxId;
+    const previousTx = editingTxId
+      ? state.transactions.find((tx) => tx.id === editingTxId) || null
+      : null;
 
     if (findPotentialDuplicateTx(txPayload, itemsPayload, editingTxId)) {
       setInlineMessage(
@@ -3533,20 +3571,39 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
           : getClientRequestId("tx");
 
       if (!txId) {
-        const { data, error } = await withTimeout(
-          supabase
-            .from("transactions")
-            .insert({
-              ...txPayload,
-              client_request_id: clientRequestId,
-            })
-            .select("id")
-            .single(),
-          18000
-        );
+        const txYear = getTxYearSuffix(txPayload);
+        let inserted = null;
+        let lastError = null;
 
-        if (error) throw error;
-        txId = data.id;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const reservedCode = await reserveNextTransactionCode(txPayload.kind, txYear);
+          const { data, error } = await withTimeout(
+            supabase
+              .from("transactions")
+              .insert({
+                ...txPayload,
+                tx_code: reservedCode,
+                client_request_id: clientRequestId,
+              })
+              .select("id, tx_code")
+              .single(),
+            18000
+          );
+
+          if (!error && data?.id) {
+            inserted = data;
+            break;
+          }
+
+          lastError = error;
+          const low = String(error?.message || "").toLowerCase();
+          const isTxCodeConflict = low.includes("tx_code") && low.includes("duplicate");
+          if (!isTxCodeConflict) break;
+        }
+
+        if (!inserted) throw lastError || new Error("No se pudo reservar un identificador único.");
+        txId = inserted.id;
+        txPayload.tx_code = normalizeTxCode(inserted.tx_code);
       } else {
         const { error } = await withTimeout(
           supabase
@@ -3581,29 +3638,39 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         if (insertItemsError) throw insertItemsError;
       }
 
-      if (!editingTxId) {
-        const txForPdf = {
-          id: txId,
-          ...txPayload,
-          created_at: new Date().toISOString(),
-        };
-        state.transactionItemsByTxId.set(
-          txId,
-          itemsPayload.map((item) => ({ concept: item.concept, amount: clampMoney(item.amount) }))
-        );
+      const txForPdf = {
+        id: txId,
+        ...txPayload,
+        tx_code: normalizeTxCode(txPayload.tx_code || previousTx?.tx_code || ""),
+        created_at: previousTx?.created_at || new Date().toISOString(),
+      };
+      state.transactionItemsByTxId.set(
+        txId,
+        itemsPayload.map((item) => ({ concept: item.concept, amount: clampMoney(item.amount) }))
+      );
 
-        createAndAttachTransactionPdf(txForPdf)
-          .then(async () => {
-            if (state.currentDetailCustomerId === txPayload.customer_id) {
-              await fetchAttachmentsForCustomer(txPayload.customer_id);
-              renderAttachments();
-            }
-          })
-          .catch((pdfError) => {
-            console.error(pdfError);
-            showToast("Registro guardado, pero no se pudo generar el PDF automático.", "warning", 4500);
-          });
-      }
+      createAndAttachTransactionPdf(txForPdf, { refreshExisting: !!editingTxId })
+        .then(async () => {
+          const customersToRefresh = new Set([
+            txPayload.customer_id,
+            previousTx?.customer_id,
+          ].filter(Boolean));
+
+          if (customersToRefresh.has(state.currentDetailCustomerId)) {
+            await fetchAttachmentsForCustomer(state.currentDetailCustomerId);
+            renderAttachments();
+          }
+        })
+        .catch((pdfError) => {
+          console.error(pdfError);
+          showToast(
+            editingTxId
+              ? "Registro actualizado, pero no se pudo actualizar el PDF automático."
+              : "Registro guardado, pero no se pudo generar el PDF automático.",
+            "warning",
+            4500
+          );
+        });
 
       await fetchTransactionsFull();
       renderRegistryList();
@@ -3711,17 +3778,22 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     let txId = editingTxId || null;
 
     if (!txId) {
+      const txYear = getTxYearSuffix(txPayload);
+      const reservedCode = await reserveNextTransactionCode(txPayload.kind, txYear);
+
       const { data, error } = await supabase
         .from("transactions")
         .insert({
           ...txPayload,
+          tx_code: reservedCode,
           client_request_id: clientRequestId || getClientRequestId("tx"),
         })
-        .select("id")
+        .select("id, tx_code")
         .single();
 
       if (error) throw error;
       txId = data.id;
+      txPayload.tx_code = normalizeTxCode(data?.tx_code || reservedCode);
     } else {
       const { error } = await supabase
         .from("transactions")
@@ -4456,8 +4528,40 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     if (!code) return 0;
     const prefix = getKindPrefix(kind);
     const normalizedYear = String(year || "").padStart(2, "0");
-    const match = String(code).match(new RegExp(`^${prefix}-(\\d{5})-${normalizedYear}$`));
+    const match = String(code).match(new RegExp(`^${prefix}-(\\d+)-${normalizedYear}(?:-.+)?$`));
     return match ? Number(match[1]) : 0;
+  }
+
+  function normalizeTxCode(code) {
+    return String(code || "").trim().toUpperCase();
+  }
+
+  async function reserveNextTransactionCode(kind, year) {
+    const prefix = getKindPrefix(kind);
+    const normalizedYear = String(year || "").padStart(2, "0");
+    const { data, error } = await withTimeout(
+      supabase
+        .from("transactions")
+        .select("tx_code")
+        .eq("kind", kind)
+        .limit(5000),
+      12000
+    );
+    if (error) throw error;
+
+    let maxSeq = 0;
+    for (const row of safeArray(data)) {
+      const seq = extractSequenceFromCode(normalizeTxCode(row?.tx_code), kind, normalizedYear);
+      if (seq > maxSeq) maxSeq = seq;
+    }
+
+    const key = buildCounterKey(kind, normalizedYear);
+    const localSeq = Number(state.txCodeRegistry.counters[key] || 0);
+    const next = Math.max(maxSeq, localSeq) + 1;
+    state.txCodeRegistry.counters[key] = next;
+
+    const code = `${prefix}-${String(next).padStart(5, "0")}-${normalizedYear}`;
+    return normalizeTxCode(code);
   }
 
   function compareTransactionsChronologicalAsc(a, b) {
@@ -4475,7 +4579,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     for (const tx of sortedTransactions) {
       const year = getTxYearSuffix(tx);
       const key = buildCounterKey(tx.kind, year);
-      const code = state.txCodeRegistry.byTxId.get(tx.id) || "";
+      const code = normalizeTxCode(tx.tx_code || state.txCodeRegistry.byTxId.get(tx.id) || "");
       const sequence = extractSequenceFromCode(code, tx.kind, year);
 
       if (sequence > 0) {
@@ -4486,8 +4590,10 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     for (const tx of sortedTransactions) {
       const year = getTxYearSuffix(tx);
       const key = buildCounterKey(tx.kind, year);
-      const code = state.txCodeRegistry.byTxId.get(tx.id) || "";
+      const code = normalizeTxCode(tx.tx_code || state.txCodeRegistry.byTxId.get(tx.id) || "");
       const sequence = extractSequenceFromCode(code, tx.kind, year);
+
+      if (code) state.txCodeRegistry.byTxId.set(tx.id, code);
 
       if (sequence > 0) continue;
 
@@ -4520,6 +4626,12 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
   }
 
   function getTransactionCode(tx) {
+    const fromTx = normalizeTxCode(tx?.tx_code);
+    if (fromTx) {
+      state.txCodeRegistry.byTxId.set(tx.id, fromTx);
+      return fromTx;
+    }
+
     const year = getTxYearSuffix(tx);
     if (state.txCodeRegistry.byTxId.has(tx.id)) {
       return state.txCodeRegistry.byTxId.get(tx.id);
@@ -4576,7 +4688,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
   function renderPendingRecords() {
     if (!els.pendingRecordsList) return;
-    const rows = sortByDateDesc(getPendingTransactions(), "tx_date");
+    const rows = [...getPendingTransactions()].sort(compareTransactionsByCodeDesc);
     if (!rows.length) { setHTML(els.pendingRecordsList, ""); show(els.pendingRecordsEmpty); return; }
     hide(els.pendingRecordsEmpty);
     setHTML(els.pendingRecordsList, rows.map((tx) => {

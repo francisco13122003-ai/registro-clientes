@@ -19,10 +19,10 @@
     return Math.round(n * 100) / 100;
   }
 
-  function buildTxPdfFileName({ txId, kind, txDate }) {
-    const safeKind = String(kind || 'registro').toLowerCase();
-    const safeDate = String(txDate || '').replace(/[^0-9\-]/g, '') || 'sin-fecha';
-    return `TX-${String(txId || 'sin-id')}-${safeKind}-${safeDate}.pdf`;
+  function buildTxPdfFileName({ txCode }) {
+    const rawCode = String(txCode || '').trim();
+    const safeCode = rawCode.replace(/[^A-Za-z0-9\-_.]+/g, '_') || 'SIN-CODIGO';
+    return `${safeCode}.pdf`;
   }
 
   function buildRecipientBlock(customer, company) {
@@ -68,11 +68,18 @@
     const recipient = buildRecipientBlock(customer, company);
     const concepts = normalizeConceptLines(tx, items);
 
-    const subtotal = toMoney(concepts.reduce((sum, line) => sum + toMoney(line.amount), 0));
-    const baseImponible = subtotal;
+    // Regla de negocio (2026-03): cada concepto ya viene con IVA incluido.
+    // Por tanto, el total fiscal del documento es exactamente la suma introducida en el registro.
+    const totalConIva = toMoney(concepts.reduce((sum, line) => sum + toMoney(line.amount), 0));
+
+    // Desglose inverso de IVA al 21% SIN volver a incrementar importes:
+    // base = total / 1.21
+    // iva = total - base
     const ivaPorcentaje = 21;
-    const ivaImporte = toMoney(baseImponible * 0.21);
-    const total = toMoney(baseImponible + ivaImporte);
+    const baseImponible = toMoney(totalConIva / 1.21);
+    const ivaImporte = toMoney(totalConIva - baseImponible);
+    const subtotal = baseImponible;
+    const total = totalConIva;
 
     return {
       docTitle: recipient.title,
@@ -125,7 +132,7 @@
     doc.text(`Dirección: ${data.companyIssuer.direccion}`, 40, y); y += 20;
 
     doc.setFont('helvetica', 'bold');
-    doc.text('Conceptos (precios sin IVA)', 40, y); y += 16;
+    doc.text('Conceptos (precios finales con IVA incluido)', 40, y); y += 16;
     doc.setFont('helvetica', 'normal');
 
     data.concepts.forEach((line) => {
