@@ -1,4 +1,4 @@
-const SW_VERSION = "flopitec-sw-v3";
+const SW_VERSION = "flopitec-sw-v4";
 const STATIC_CACHE = `${SW_VERSION}-static`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
 
@@ -9,7 +9,11 @@ const APP_SHELL = [
   "./config.js",
   "./supabase.js",
   "./utils.js",
+  "./fiscal-core.js",
+  "./fiscal-ui.js",
+  "./tx-pdf-service.js",
   "./app.js",
+  "./logo.PNG",
 ];
 
 const ALLOWED_STATIC_DESTINATIONS = new Set([
@@ -168,11 +172,6 @@ async function handleNavigationRequest(request) {
 }
 
 async function handleStaticAssetRequest(request) {
-  const cachedResponse = await caches.match(request);
-  if (cachedResponse) {
-    return cachedResponse;
-  }
-
   try {
     const networkResponse = await fetch(request);
 
@@ -183,6 +182,7 @@ async function handleStaticAssetRequest(request) {
 
     return networkResponse;
   } catch (error) {
+    const cachedResponse = await caches.match(request);
     return cachedResponse || Response.error();
   }
 }
