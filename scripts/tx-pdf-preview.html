@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Preview PDF transacción</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 16px; background: #f3f4f6; color: #111827; }
+    .toolbar { display: flex; gap: 8px; margin-bottom: 10px; }
+    button { border: 0; background: #1f2937; color: white; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+    iframe { width: 100%; height: 85vh; border: 1px solid #d1d5db; background: white; }
+    code { background: #e5e7eb; padding: 2px 4px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Preview local del PDF de transacciones</h1>
+  <p>Esta utilidad genera un PDF con datos mock (sin depender de datos productivos).</p>
+  <p>Identificador mock: <code>FC-00001-26</code> · Fecha mock: <code>18/03/2026</code>.</p>
+
+  <div class="toolbar">
+    <button id="renderBtn" type="button">Generar preview</button>
+    <button id="downloadBtn" type="button">Descargar PDF</button>
+  </div>
+
+  <iframe id="previewFrame" title="Vista previa PDF"></iframe>
+
+  <script src="../tx-pdf-service.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="./tx-pdf-preview.js"></script>
+</body>
+</html>
