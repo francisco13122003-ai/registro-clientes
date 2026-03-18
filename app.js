@@ -2273,7 +2273,10 @@ async function deleteCurrentCustomer() {
       rows
         .map((tx) => {
           const statusMeta = extractStatusMeta(tx.comments);
-          const code = getTransactionCode(tx);
+          const code = displayTransactionCode(tx);
+          if (code === "—") {
+            txDiagLog("missing_tx_code_on_render", { scope: "client_history", txId: tx.id, kind: tx.kind });
+          }
           const cleanComments = stripStatusMeta(tx.comments);
           const items = state.transactionItemsByTxId.get(tx.id) || [];
 
@@ -2978,7 +2981,14 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       });
     }
 
-    const txCode = getTransactionCode(tx);
+    const txCode = getStoredTransactionCode(tx);
+    if (!txCode) {
+      console.warn("[tx-pdf] tx sin tx_code real; se omite regeneración automática de PDF", {
+        txId: tx.id,
+      });
+      txDiagLog("missing_tx_code_on_pdf_regen", { txId: tx.id, kind: tx.kind });
+      return null;
+    }
 
     const data = txPdfService.buildPdfData({
       tx,
@@ -3190,9 +3200,14 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     };
   }
 
-  function compareTransactionsByCodeAsc(a, b, codeByTxId = new Map()) {
-    const codeA = codeByTxId.get(a.id) || getTransactionCode(a);
-    const codeB = codeByTxId.get(b.id) || getTransactionCode(b);
+  function compareTransactionsByCodeAsc(a, b) {
+    const codeA = getStoredTransactionCode(a);
+    const codeB = getStoredTransactionCode(b);
+    const hasA = !!codeA;
+    const hasB = !!codeB;
+    if (hasA && !hasB) return -1;
+    if (!hasA && hasB) return 1;
+    if (!hasA && !hasB) return String(a?.id || "").localeCompare(String(b?.id || ""));
 
     const partsA = parseTxCodeSortParts(codeA);
     const partsB = parseTxCodeSortParts(codeB);
@@ -3204,8 +3219,8 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     return partsA.normalized.localeCompare(partsB.normalized);
   }
 
-  function compareTransactionsByCodeDesc(a, b, codeByTxId = new Map()) {
-    return compareTransactionsByCodeAsc(a, b, codeByTxId) * -1;
+  function compareTransactionsByCodeDesc(a, b) {
+    return compareTransactionsByCodeAsc(a, b) * -1;
   }
 
   function compareTransactionsForRegistry(a, b) {
@@ -3234,8 +3249,8 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     }
   }
 
-  function compareTransactionsForPdfAsc(a, b, codeByTxId = new Map()) {
-    return compareTransactionsByCodeAsc(a, b, codeByTxId);
+  function compareTransactionsForPdfAsc(a, b) {
+    return compareTransactionsByCodeAsc(a, b);
   }
 
   // =========================================
@@ -3252,8 +3267,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
               .from("transactions")
               .select("*")
               .order("tx_date", { ascending: false })
-              .order("created_at", { ascending: false })
-              .limit(REGISTRY_LIMIT),
+              .order("created_at", { ascending: false }),
             18000
           ),
           withTimeout(
@@ -3282,7 +3296,6 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       state.transactionItemsByTxId = itemsMap;
 
       dedupeTransactionsInState();
-      syncTxCodeRegistryFromState();
       state.registry.txLoadedOnce = true;
     } finally {
       state.loading.registry = false;
@@ -3924,7 +3937,10 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
               : clampMoney(tx.total_amount || 0);
 
           const statusMeta = extractStatusMeta(tx.comments);
-          const code = getTransactionCode(tx);
+          const code = displayTransactionCode(tx);
+          if (code === "—") {
+            txDiagLog("missing_tx_code_on_render", { scope: "registry", txId: tx.id, kind: tx.kind });
+          }
           const cleanComments = stripStatusMeta(tx.comments);
           const concepts =
             items.length > 0
@@ -3992,7 +4008,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
     setSelectedTxCustomer(tx.customer_id || null);
 
-    if (els.txDate) els.txDate.value = tx.tx_date || todayISO();
+    if (els.txDate) els.txDate.value = tx.tx_date || "";
     if (els.txPayment) els.txPayment.value = tx.payment_method || "";
     const statusMeta = extractStatusMeta(tx.comments);
     if (els.txComments) els.txComments.value = stripStatusMeta(tx.comments);
@@ -4536,6 +4552,30 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     return String(code || "").trim().toUpperCase();
   }
 
+  const TX_DIAG = !!window?.APP_CONFIG?.DEBUG_TX_DIAG;
+
+  function txDiagLog(event, payload = {}) {
+    if (!TX_DIAG) return;
+    console.debug(`[tx-diag] ${event}`, payload);
+  }
+
+  function getStoredTransactionCode(tx) {
+    return normalizeTxCode(tx?.tx_code);
+  }
+
+  function displayTransactionCode(tx) {
+    const stored = getStoredTransactionCode(tx);
+    if (!stored) {
+      txDiagLog("missing_tx_code_real", { txId: tx?.id, kind: tx?.kind, tx_date: tx?.tx_date });
+      return "—";
+    }
+    const calculated = normalizeTxCode(state.txCodeRegistry.byTxId.get(tx?.id) || "");
+    if (calculated && calculated !== stored) {
+      txDiagLog("stored_vs_calculated_mismatch", { txId: tx?.id, stored, calculated });
+    }
+    return stored;
+  }
+
   async function reserveNextTransactionCode(kind, year) {
     const prefix = getKindPrefix(kind);
     const normalizedYear = String(year || "").padStart(2, "0");
@@ -4555,10 +4595,8 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       if (seq > maxSeq) maxSeq = seq;
     }
 
-    const key = buildCounterKey(kind, normalizedYear);
-    const localSeq = Number(state.txCodeRegistry.counters[key] || 0);
-    const next = Math.max(maxSeq, localSeq) + 1;
-    state.txCodeRegistry.counters[key] = next;
+    const next = maxSeq + 1;
+    txDiagLog("reserve_next_code", { kind, year: normalizedYear, maxSeq, next });
 
     const code = `${prefix}-${String(next).padStart(5, "0")}-${normalizedYear}`;
     return normalizeTxCode(code);
@@ -4695,7 +4733,11 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       const customer = state.customerMap.get(tx.customer_id);
       const company = state.companyMapByCustomerId.get(tx.customer_id) || null;
       const meta = extractStatusMeta(tx.comments);
-      return `<article class="list-item pending-record-item"><div class="list-item-main"><div class="list-item-title">${escapeHtml(customerDisplayName(customer, company))} · ${escapeHtml(getTransactionCode(tx))}</div><div class="list-item-subtitle">Total: ${escapeHtml(euro(tx.total_amount || 0))} · Pagado: <span style="color:#ff9b9b">${escapeHtml(euro(meta.paidAmount || 0))}</span></div></div><div class="list-item-actions pending-actions"><button class="btn ${meta.paidFull?"btn-primary":"btn-danger"}" data-toggle-pending="paid" data-tx-id="${escapeHtml(tx.id)}" type="button">Pagado</button><button class="btn ${meta.delivered?"btn-primary":"btn-ghost"}" data-toggle-pending="delivered" data-tx-id="${escapeHtml(tx.id)}" type="button">Entregado</button></div></article>`;
+      const code = displayTransactionCode(tx);
+      if (code === "—") {
+        txDiagLog("missing_tx_code_on_render", { scope: "pending", txId: tx.id, kind: tx.kind });
+      }
+      return `<article class="list-item pending-record-item"><div class="list-item-main"><div class="list-item-title">${escapeHtml(customerDisplayName(customer, company))} · ${escapeHtml(code)}</div><div class="list-item-subtitle">Total: ${escapeHtml(euro(tx.total_amount || 0))} · Pagado: <span style="color:#ff9b9b">${escapeHtml(euro(meta.paidAmount || 0))}</span></div></div><div class="list-item-actions pending-actions"><button class="btn ${meta.paidFull?"btn-primary":"btn-danger"}" data-toggle-pending="paid" data-tx-id="${escapeHtml(tx.id)}" type="button">Pagado</button><button class="btn ${meta.delivered?"btn-primary":"btn-ghost"}" data-toggle-pending="delivered" data-tx-id="${escapeHtml(tx.id)}" type="button">Entregado</button></div></article>`;
     }).join(""));
   }
 
@@ -4738,7 +4780,11 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     [...rows]
       .sort((a, b) => String(a.tx_date || a.created_at || "").localeCompare(String(b.tx_date || b.created_at || "")))
       .forEach((tx) => {
-        codeByTxId.set(tx.id, getTransactionCode(tx));
+        const stored = getStoredTransactionCode(tx);
+        if (!stored) {
+          txDiagLog("missing_tx_code_on_export", { txId: tx.id, kind: tx.kind, tx_date: tx.tx_date });
+        }
+        codeByTxId.set(tx.id, stored);
       });
 
     const doc = new jspdf({unit:"pt",format:"a4"});
@@ -4748,7 +4794,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       const c=state.customerMap.get(tx.customer_id);
       const customerName = customerDisplayName(c,state.companyMapByCustomerId.get(tx.customer_id)||null);
       const concepts = getTransactionConceptText(tx) || "Sin concepto";
-      const line = `${codeByTxId.get(tx.id) || getTransactionCode(tx)} | ${formatDate(tx.tx_date)} | ${customerName} | Concepto: ${concepts} | ${euro(tx.total_amount||0)}`;
+      const line = `${codeByTxId.get(tx.id) || "—"} | ${formatDate(tx.tx_date)} | ${customerName} | Concepto: ${concepts} | ${euro(tx.total_amount||0)}`;
       const wrappedLines = doc.splitTextToSize(line, 520);
       doc.text(wrappedLines,40,y);
       y += (wrappedLines.length * 12) + 6;
