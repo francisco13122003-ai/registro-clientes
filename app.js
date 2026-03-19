@@ -4512,24 +4512,32 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     return { ticket: "TK", factura: "FC", otro: "OT", nico: "NC" }[kind] || "RG";
   }
 
+  const TX_CODE_REGISTRY_STORAGE_KEY = "txCodeRegistry:v1";
+
+  /**
+   * @deprecated Motor legacy de códigos visuales (desactivado).
+   * No debe volver a leer ni mezclar códigos desde localStorage.
+   */
   function loadTxCodeRegistry() {
+    state.txCodeRegistry.byTxId = new Map();
+    state.txCodeRegistry.counters = {};
     try {
-      const raw = localStorage.getItem("txCodeRegistry:v1");
-      const parsed = raw ? JSON.parse(raw) : null;
-      state.txCodeRegistry.byTxId = new Map(Object.entries(parsed?.byTxId || {}));
-      state.txCodeRegistry.counters = parsed?.counters || {};
+      localStorage.removeItem(TX_CODE_REGISTRY_STORAGE_KEY);
     } catch {
-      state.txCodeRegistry.byTxId = new Map();
-      state.txCodeRegistry.counters = {};
+      // no-op defensivo
     }
   }
 
+  /**
+   * @deprecated Motor legacy de códigos visuales (desactivado).
+   * Se deja como no-op para compatibilidad; no debe persistir nada.
+   */
   function persistTxCodeRegistry() {
-    const payload = {
-      byTxId: Object.fromEntries(state.txCodeRegistry.byTxId.entries()),
-      counters: state.txCodeRegistry.counters,
-    };
-    localStorage.setItem("txCodeRegistry:v1", JSON.stringify(payload));
+    try {
+      localStorage.removeItem(TX_CODE_REGISTRY_STORAGE_KEY);
+    } catch {
+      // no-op defensivo
+    }
   }
 
   function buildCounterKey(kind, year) {
@@ -4569,10 +4577,6 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       txDiagLog("missing_tx_code_real", { txId: tx?.id, kind: tx?.kind, tx_date: tx?.tx_date });
       return "—";
     }
-    const calculated = normalizeTxCode(state.txCodeRegistry.byTxId.get(tx?.id) || "");
-    if (calculated && calculated !== stored) {
-      txDiagLog("stored_vs_calculated_mismatch", { txId: tx?.id, stored, calculated });
-    }
     return stored;
   }
 
@@ -4609,77 +4613,26 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     return String(a?.id || "").localeCompare(String(b?.id || ""));
   }
 
-  function syncTxCodeRegistryFromState() {
-    const counters = {};
-    const sortedTransactions = [...state.transactions].sort(compareTransactionsChronologicalAsc);
-    let changed = false;
+  /**
+   * @deprecated Motor legacy de códigos visuales (desactivado).
+   * No genera ni sincroniza códigos; se mantiene como no-op por compatibilidad.
+   */
+  function syncTxCodeRegistryFromState() {}
 
-    for (const tx of sortedTransactions) {
-      const year = getTxYearSuffix(tx);
-      const key = buildCounterKey(tx.kind, year);
-      const code = normalizeTxCode(tx.tx_code || state.txCodeRegistry.byTxId.get(tx.id) || "");
-      const sequence = extractSequenceFromCode(code, tx.kind, year);
-
-      if (sequence > 0) {
-        counters[key] = Math.max(Number(counters[key] || 0), sequence);
-      }
-    }
-
-    for (const tx of sortedTransactions) {
-      const year = getTxYearSuffix(tx);
-      const key = buildCounterKey(tx.kind, year);
-      const code = normalizeTxCode(tx.tx_code || state.txCodeRegistry.byTxId.get(tx.id) || "");
-      const sequence = extractSequenceFromCode(code, tx.kind, year);
-
-      if (code) state.txCodeRegistry.byTxId.set(tx.id, code);
-
-      if (sequence > 0) continue;
-
-      const next = Number(counters[key] || 0) + 1;
-      const generatedCode = `${getKindPrefix(tx.kind)}-${String(next).padStart(5, "0")}-${year}`;
-      state.txCodeRegistry.byTxId.set(tx.id, generatedCode);
-      counters[key] = next;
-      changed = true;
-    }
-
-    state.txCodeRegistry.counters = counters;
-    if (changed) persistTxCodeRegistry();
+  /**
+   * @deprecated Motor legacy de códigos visuales (desactivado).
+   * No debe volver a calcular secuencias visuales en frontend.
+   */
+  function nextCodeFor() {
+    return 0;
   }
 
-  function nextCodeFor(kind, year) {
-    const key = buildCounterKey(kind, year);
-    let maxSeen = Number(state.txCodeRegistry.counters[key] || 0);
-
-    for (const tx of state.transactions) {
-      const txYear = getTxYearSuffix(tx);
-      if (tx.kind !== kind || txYear !== String(year)) continue;
-      const knownCode = state.txCodeRegistry.byTxId.get(tx.id) || "";
-      maxSeen = Math.max(maxSeen, extractSequenceFromCode(knownCode, kind, year));
-    }
-
-    const next = maxSeen + 1;
-    state.txCodeRegistry.counters[key] = next;
-    persistTxCodeRegistry();
-    return next;
-  }
-
+  /**
+   * @deprecated Motor legacy de códigos visuales (desactivado).
+   * La única fuente válida es tx.tx_code persistido en BD.
+   */
   function getTransactionCode(tx) {
-    const fromTx = normalizeTxCode(tx?.tx_code);
-    if (fromTx) {
-      state.txCodeRegistry.byTxId.set(tx.id, fromTx);
-      return fromTx;
-    }
-
-    const year = getTxYearSuffix(tx);
-    if (state.txCodeRegistry.byTxId.has(tx.id)) {
-      return state.txCodeRegistry.byTxId.get(tx.id);
-    }
-
-    const seq = nextCodeFor(tx.kind, year);
-    const code = `${getKindPrefix(tx.kind)}-${String(seq).padStart(5, "0")}-${year}`;
-    state.txCodeRegistry.byTxId.set(tx.id, code);
-    persistTxCodeRegistry();
-    return code;
+    return normalizeTxCode(tx?.tx_code);
   }
 
   function attachStatusMeta(comment, meta) {
