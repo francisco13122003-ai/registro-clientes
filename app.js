@@ -4686,11 +4686,12 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       const customer = state.customerMap.get(tx.customer_id);
       const company = state.companyMapByCustomerId.get(tx.customer_id) || null;
       const meta = extractStatusMeta(tx.comments);
+      const concept = getTransactionConceptText(tx) || "Sin concepto";
       const code = displayTransactionCode(tx);
       if (code === "—") {
         txDiagLog("missing_tx_code_on_render", { scope: "pending", txId: tx.id, kind: tx.kind });
       }
-      return `<article class="list-item pending-record-item"><div class="list-item-main"><div class="list-item-title">${escapeHtml(customerDisplayName(customer, company))} · ${escapeHtml(code)}</div><div class="list-item-subtitle">Total: ${escapeHtml(euro(tx.total_amount || 0))} · Pagado: <span style="color:#ff9b9b">${escapeHtml(euro(meta.paidAmount || 0))}</span></div></div><div class="list-item-actions pending-actions"><button class="btn ${meta.paidFull?"btn-primary":"btn-danger"}" data-toggle-pending="paid" data-tx-id="${escapeHtml(tx.id)}" type="button">Pagado</button><button class="btn ${meta.delivered?"btn-primary":"btn-ghost"}" data-toggle-pending="delivered" data-tx-id="${escapeHtml(tx.id)}" type="button">Entregado</button></div></article>`;
+      return `<article class="list-item pending-record-item"><div class="list-item-main"><div class="list-item-title">${escapeHtml(customerDisplayName(customer, company))} · ${escapeHtml(code)}</div><div class="list-item-subtitle">Concepto: ${escapeHtml(concept)}</div><div class="list-item-subtitle">Total: ${escapeHtml(euro(tx.total_amount || 0))} · Pagado: <span style="color:#ff9b9b">${escapeHtml(euro(meta.paidAmount || 0))}</span></div></div><div class="list-item-actions pending-actions"><button class="btn ${meta.paidFull?"btn-primary":"btn-danger"}" data-toggle-pending="paid" data-tx-id="${escapeHtml(tx.id)}" type="button">Pagado</button><button class="btn ${meta.delivered?"btn-primary":"btn-ghost"}" data-toggle-pending="delivered" data-tx-id="${escapeHtml(tx.id)}" type="button">Entregado</button></div></article>`;
     }).join(""));
   }
 
