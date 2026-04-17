@@ -385,6 +385,8 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       editingTxId: null,
       selectedCustomerId: null,
       draftItems: [],
+      editOriginalItemsSnapshot: [],
+      editOriginalTotalAmount: null,
       txLoadedOnce: false,
       openFromDetailCustomerId: null,
       lastFilterText: "",
@@ -2655,7 +2657,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     }
 
     if (state.registry.currentKind !== "nico") {
-      setText(els.txTotal, euro(getDraftItemsTotal()));
+      setText(els.txTotal, euro(getCurrentTxEditorDisplayTotal()));
     }
   }
 
@@ -2668,6 +2670,44 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       .filter((item) => item.concept || item.amount !== 0);
   }
 
+  function snapshotItemsForComparison(items = []) {
+    return safeArray(items).map((item) => ({
+      concept: normalize(item.concept),
+      amount: clampMoney(item.amount),
+    }));
+  }
+
+  function areDraftItemsEqual(leftItems = [], rightItems = []) {
+    if (leftItems.length !== rightItems.length) return false;
+    for (let i = 0; i < leftItems.length; i += 1) {
+      if (normalize(leftItems[i]?.concept) !== normalize(rightItems[i]?.concept)) return false;
+      if (clampMoney(leftItems[i]?.amount) !== clampMoney(rightItems[i]?.amount)) return false;
+    }
+    return true;
+  }
+
+  function getCurrentTxEditorDisplayTotal() {
+    if (state.registry.currentKind === "nico") {
+      return clampMoney(els.nicoTotal?.value || 0);
+    }
+
+    const currentSum = getDraftItemsTotal();
+    if (!state.registry.editingTxId) return currentSum;
+
+    const itemsUnchanged = areDraftItemsEqual(
+      getDraftItemsSanitized(),
+      state.registry.editOriginalItemsSnapshot
+    );
+    const persistedTotal = state.registry.editOriginalTotalAmount;
+    const hasPersistedTotal = persistedTotal !== null && persistedTotal !== undefined;
+
+    if (itemsUnchanged && hasPersistedTotal) {
+      return clampMoney(persistedTotal);
+    }
+
+    return currentSum;
+  }
+
   function getDraftItemsTotal() {
     return getDraftItemsSanitized().reduce((sum, item) => sum + clampMoney(item.amount), 0);
   }
@@ -2678,7 +2718,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     const isNico = state.registry.currentKind === "nico";
 
     if (isNico) {
-      setText(els.txTotal, euro(clampMoney(els.nicoTotal?.value || 0)));
+      setText(els.txTotal, euro(getCurrentTxEditorDisplayTotal()));
       hide(els.txItemsEmpty);
       setHTML(els.txItems, "");
       return;
@@ -2742,7 +2782,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         .join("")
     );
 
-    setText(els.txTotal, euro(getDraftItemsTotal()));
+    setText(els.txTotal, euro(getCurrentTxEditorDisplayTotal()));
   }
 
   function bindDraftItemsDelegation() {
@@ -2796,6 +2836,8 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     state.registry.editingTxId = null;
     state.registry.selectedCustomerId = null;
     state.registry.draftItems = [];
+    state.registry.editOriginalItemsSnapshot = [];
+    state.registry.editOriginalTotalAmount = null;
 
     setText(els.txMsg, "");
     setInlineMessage(els.txMsg, "");
@@ -3401,6 +3443,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
   function collectTxPayloadFromForm() {
     const kind = state.registry.currentKind;
+    const computaFiscalmente = kind === "ticket" || kind === "factura";
 
     const baseComments = normalize(els.txComments?.value);
     const base = {
@@ -3409,6 +3452,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       tx_date: normalize(els.txDate?.value) || todayISO(),
       payment_method: normalize(els.txPayment?.value) || null,
       comments: attachStatusMeta(baseComments, collectTxStatusMeta()),
+      computa_fiscalmente: computaFiscalmente,
     };
 
     if (kind === "nico") {
@@ -3435,13 +3479,24 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     }
 
     const sanitizedItems = getDraftItemsSanitized();
+    const itemsChangedDuringEdit = state.registry.editingTxId
+      ? !areDraftItemsEqual(sanitizedItems, state.registry.editOriginalItemsSnapshot)
+      : true;
+    const canPreservePersistedTotal =
+      state.registry.editingTxId &&
+      !itemsChangedDuringEdit &&
+      state.registry.editOriginalTotalAmount !== null &&
+      state.registry.editOriginalTotalAmount !== undefined;
+    const computedTotalFromItems = clampMoney(
+      sanitizedItems.reduce((sum, item) => sum + clampMoney(item.amount), 0)
+    );
 
     return {
       txPayload: {
         ...base,
-        total_amount: clampMoney(
-          sanitizedItems.reduce((sum, item) => sum + clampMoney(item.amount), 0)
-        ),
+        total_amount: canPreservePersistedTotal
+          ? clampMoney(state.registry.editOriginalTotalAmount)
+          : computedTotalFromItems,
         material_cost: null,
         nico_amount: null,
         flopitec_amount: null,
@@ -4001,6 +4056,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
     state.registry.editingTxId = tx.id;
     state.registry.currentKind = tx.kind;
+    state.registry.editOriginalTotalAmount = tx.total_amount ?? null;
 
     show(els.txFormBox);
     show(els.btnTxDelete);
@@ -4018,6 +4074,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     updateTxPaidAmountState();
 
     if (tx.kind === "nico") {
+      state.registry.editOriginalItemsSnapshot = [];
       toggle(els.txNicoBox, true);
       toggle(els.txItemsBox, false);
 
@@ -4033,6 +4090,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       toggle(els.txItemsBox, true);
 
       const items = state.transactionItemsByTxId.get(tx.id) || [];
+      state.registry.editOriginalItemsSnapshot = snapshotItemsForComparison(items);
       state.registry.draftItems = items.length
         ? items.map((item) => ({
             id: item.id || uuidLike(),
