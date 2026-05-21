@@ -271,6 +271,35 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     btnAddItem: $("btnAddItem"),
     txTotal: $("txTotal"),
     txNicoBox: $("txNicoBox"),
+
+    panelEntryRegistry: $("panelEntryRegistry"),
+    btnEntryNew: $("btnEntryNew"),
+    entryFormBox: $("entryFormBox"),
+    btnEntryClose: $("btnEntryClose"),
+    btnEntryReset: $("btnEntryReset"),
+    btnEntrySave: $("btnEntrySave"),
+    entryCustomerSearch: $("entryCustomerSearch"),
+    entryCustomerResults: $("entryCustomerResults"),
+    entryCustomerSelected: $("entryCustomerSelected"),
+    btnEntryCreateCustomer: $("btnEntryCreateCustomer"),
+    btnEntryClearCustomer: $("btnEntryClearCustomer"),
+    entryReceptionDate: $("entryReceptionDate"),
+    entryExpectedDate: $("entryExpectedDate"),
+    entryDeviceTitle: $("entryDeviceTitle"),
+    entryBrand: $("entryBrand"),
+    entryModel: $("entryModel"),
+    entrySerialNumber: $("entrySerialNumber"),
+    entryAccessories: $("entryAccessories"),
+    entryVisibleDamage: $("entryVisibleDamage"),
+    entryPreliminaryDiagnosis: $("entryPreliminaryDiagnosis"),
+    entryInternalNotes: $("entryInternalNotes"),
+    entryWaivesEstimate: $("entryWaivesEstimate"),
+    entryFilterInput: $("entryFilterInput"),
+    entryFilterYear: $("entryFilterYear"),
+    btnEntryToggleOrder: $("btnEntryToggleOrder"),
+    entryList: $("entryList"),
+    entryListEmpty: $("entryListEmpty"),
+
     nicoConcept: $("nicoConcept"),
     nicoMaterial: $("nicoMaterial"),
     nicoTotal: $("nicoTotal"),
@@ -371,6 +400,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     transactions: [],
     transactionItemsByTxId: new Map(),
     expenses: [],
+    entryRecords: [],
 
     currentCustomerId: null,
     currentDetailCustomerId: null,
@@ -409,6 +439,12 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       editingId: null,
     },
 
+    entryUi: {
+      editingId: null,
+      selectedCustomerId: null,
+      sortDescending: true,
+    },
+
     selectedUploadFile: null,
 
     offline: {
@@ -435,6 +471,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
   const PANEL_NAMES = [
     "home",
     "registry",
+    "entryRegistry",
     "accounting",
     "fiscal",
     "expenses",
@@ -446,6 +483,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
   const panelMap = {
     home: els.panelHome,
     registry: els.panelRegistry,
+    entryRegistry: els.panelEntryRegistry,
     accounting: els.panelAccounting,
     fiscal: els.panelFiscal,
     expenses: els.panelExpenses,
@@ -505,6 +543,8 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       renderFiscalPanel().catch(console.error);
     } else if (panelName === "expenses") {
       renderExpensesPanel().catch(console.error);
+    } else if (panelName === "entryRegistry") {
+      renderEntryRegistryList();
     }
   }
 
@@ -541,6 +581,8 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       renderFiscalPanel().catch(console.error);
     } else if (panelName === "expenses") {
       renderExpensesPanel().catch(console.error);
+    } else if (panelName === "entryRegistry") {
+      renderEntryRegistryList();
     }
   }
 
@@ -3347,6 +3389,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
   async function ensureTransactionsLoaded() {
     if (!state.registry.txLoadedOnce) {
       await fetchTransactionsFull();
+      await fetchEntryRecords().catch(console.error);
       renderHomeStats();
       renderClientHistory();
     }
@@ -3741,6 +3784,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         });
 
       await fetchTransactionsFull();
+      await fetchEntryRecords().catch(console.error);
       renderRegistryList();
       renderPendingRecords();
       renderHomeStats();
@@ -3815,6 +3859,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       if (error) throw error;
 
       await fetchTransactionsFull();
+      await fetchEntryRecords().catch(console.error);
       renderRegistryList();
       renderPendingRecords();
       renderHomeStats();
@@ -4328,6 +4373,8 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       renderFiscalPanel().catch(console.error);
     } else if (panelName === "expenses") {
       renderExpensesPanel().catch(console.error);
+    } else if (panelName === "entryRegistry") {
+      renderEntryRegistryList();
     }
   };
 
@@ -4347,6 +4394,8 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       renderFiscalPanel().catch(console.error);
     } else if (panelName === "expenses") {
       renderExpensesPanel().catch(console.error);
+    } else if (panelName === "entryRegistry") {
+      renderEntryRegistryList();
     } else if (panelName === "registry") {
       openRegistryPanel().catch(console.error);
     } else if (panelName === "accounting") {
@@ -4378,8 +4427,272 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       state.registry.openFromDetailCustomerId = state.currentDetailCustomerId || null;
       navigateTo("registry");
       openEditTransaction(txId).catch(console.error);
+      return;
+    }
+
+    const openEntryEditId = target.dataset.entryEdit;
+    if (openEntryEditId) {
+      const row = state.entryRecords.find((r) => r.id === openEntryEditId);
+      if (!row) return;
+      state.entryUi.editingId = row.id;
+      setSelectedEntryCustomer(row.client_id || null);
+      if (els.entryReceptionDate) els.entryReceptionDate.value = row.reception_date || todayISO();
+      if (els.entryExpectedDate) els.entryExpectedDate.value = row.expected_delivery_date || "";
+      if (els.entryDeviceTitle) els.entryDeviceTitle.value = row.device_title || "";
+      if (els.entryBrand) els.entryBrand.value = row.brand || "";
+      if (els.entryModel) els.entryModel.value = row.model || "";
+      if (els.entrySerialNumber) els.entrySerialNumber.value = row.serial_number || "";
+      if (els.entryAccessories) els.entryAccessories.value = row.accessories || "";
+      if (els.entryVisibleDamage) els.entryVisibleDamage.value = row.visible_damage || "";
+      if (els.entryPreliminaryDiagnosis) els.entryPreliminaryDiagnosis.value = row.preliminary_diagnosis || "";
+      if (els.entryInternalNotes) els.entryInternalNotes.value = row.internal_notes || "";
+      if (els.entryWaivesEstimate) els.entryWaivesEstimate.checked = !!row.waives_prior_estimate;
+      if (els.btnEntrySave) els.btnEntrySave.textContent = "Guardar";
+      show(els.entryFormBox);
+      return;
+    }
+
+    const openEntryPdfId = target.dataset.entryPdf;
+    if (openEntryPdfId) {
+      openEntryPdf(openEntryPdfId).catch(console.error);
+      return;
+    }
+
+    const deleteEntryId = target.dataset.entryDelete;
+    if (deleteEntryId) {
+      deleteEntryRecord(deleteEntryId).catch(console.error);
+      return;
     }
   };
+
+  async function fetchEntryRecords() {
+    const { data, error } = await withTimeout(
+      supabase.from("registros_entrada").select("*").is("deleted_at", null).limit(REGISTRY_LIMIT),
+      12000
+    );
+    if (error) throw error;
+    state.entryRecords = safeArray(data);
+  }
+
+  function setSelectedEntryCustomer(customerId) {
+    state.entryUi.selectedCustomerId = customerId || null;
+    const customer = state.customerMap.get(customerId) || null;
+    const company = state.companyMapByCustomerId.get(customerId) || null;
+    setText(els.entryCustomerSelected, customer ? customerDisplayName(customer, company) : "—");
+  }
+
+  function renderEntryCustomerSearchResults() {
+    const text = normalize(els.entryCustomerSearch?.value);
+    const results = filterCustomersByText(text).slice(0, 50);
+    if (!results.length) return setHTML(els.entryCustomerResults, text ? '<div class="empty-box">No se han encontrado clientes.</div>' : '');
+    setHTML(els.entryCustomerResults, results.map(({ customer, company, displayName }) => `
+      <div class="mini-item ${state.entryUi.selectedCustomerId === customer.id ? "is-selected" : ""}" data-entry-customer-pick="${escapeHtml(customer.id)}">
+        <div class="mini-item-title">${escapeHtml(displayName)}</div>
+        <div class="mini-item-subtitle">${escapeHtml(customer.is_company ? companyDisplayLine(company) : ([customer.phone, customer.address].filter(Boolean).join(" · ") || "Cliente particular"))}</div>
+      </div>`).join(""));
+  }
+
+  function resetEntryForm({ keepOpen = false } = {}) {
+    state.entryUi.editingId = null;
+    setSelectedEntryCustomer(null);
+    if (els.entryCustomerSearch) els.entryCustomerSearch.value = "";
+    if (els.entryReceptionDate) els.entryReceptionDate.value = todayISO();
+    ["entryExpectedDate","entryDeviceTitle","entryBrand","entryModel","entrySerialNumber","entryAccessories","entryVisibleDamage","entryPreliminaryDiagnosis","entryInternalNotes"].forEach((id)=>{ if (els[id]) els[id].value = ""; });
+    if (els.entryWaivesEstimate) els.entryWaivesEstimate.checked = true;
+    if (els.btnEntrySave) els.btnEntrySave.textContent = "Crear";
+    toggle(els.entryFormBox, !!keepOpen);
+  }
+
+  async function saveEntryRecord() {
+    const payload = {
+      client_id: state.entryUi.selectedCustomerId,
+      reception_date: normalize(els.entryReceptionDate?.value) || todayISO(),
+      expected_delivery_date: normalize(els.entryExpectedDate?.value) || null,
+      device_title: normalize(els.entryDeviceTitle?.value),
+      brand: normalize(els.entryBrand?.value),
+      model: normalize(els.entryModel?.value),
+      serial_number: normalize(els.entrySerialNumber?.value),
+      accessories: normalize(els.entryAccessories?.value),
+      visible_damage: normalize(els.entryVisibleDamage?.value),
+      preliminary_diagnosis: normalize(els.entryPreliminaryDiagnosis?.value),
+      internal_notes: normalize(els.entryInternalNotes?.value),
+      waives_prior_estimate: !!els.entryWaivesEstimate?.checked,
+      status: "open",
+    };
+    if (!payload.device_title) return showToast("Indica el concepto/aparato.","warning");
+    let saved = null;
+    if (state.entryUi.editingId) {
+      const { data, error } = await withTimeout(
+        supabase.from("registros_entrada").update(payload).eq("id", state.entryUi.editingId).select("*").single(),
+        12000
+      );
+      if (error) throw error;
+      saved = data;
+    } else {
+      const { data, error } = await withTimeout(
+        supabase.from("registros_entrada").insert(payload).select("*").single(),
+        12000
+      );
+      if (error) throw error;
+      saved = data;
+    }
+    const attachResult = await createAndAttachEntryPdf(saved);
+    if (attachResult?.filePath) {
+      await openEntryPdf(saved.id).catch((error) => {
+        console.error(error);
+        showToast("Registro guardado, pero no se pudo abrir el PDF automáticamente.", "warning");
+      });
+    }
+    await fetchEntryRecords();
+    renderEntryRegistryList();
+    resetEntryForm({ keepOpen: false });
+  }
+
+  async function createAndAttachEntryPdf(entry) {
+    const entryPdfService = window.EntryPdfService;
+    const jspdfCtor = window.jspdf?.jsPDF;
+    if (!entry?.id || !entry?.re_code || !entryPdfService || !jspdfCtor) return null;
+
+    const customer = state.customerMap.get(entry.client_id) || null;
+    const company = state.companyMapByCustomerId.get(entry.client_id) || null;
+    const customerName = customer ? customerDisplayName(customer, company) : "Cliente";
+    const customerPhone = customer?.phone || "";
+    const customerAddress = customer?.is_company
+      ? [company?.address, company?.postal_code, company?.city, company?.province].filter(Boolean).join(", ")
+      : (customer?.address || "");
+
+    const doc = entryPdfService.renderPdfToJsPdf({
+      ...entry,
+      customer_name: customerName,
+      customer_phone: customerPhone,
+      customer_address: customerAddress,
+    }, jspdfCtor);
+
+    const blob = doc.output("blob");
+    const fileName = entryPdfService.buildFileName(entry.re_code);
+    const filePath = `entry-records/${entry.id}/${fileName}`;
+
+    const { error: uploadError } = await withTimeout(
+      supabase.storage.from(STORAGE_BUCKET).upload(filePath, blob, { upsert: true, contentType: "application/pdf" }),
+      25000
+    );
+    if (uploadError) throw uploadError;
+
+    let attachmentId = entry.main_attachment_id || null;
+    const payload = {
+      customer_id: entry.client_id || null,
+      file_name: fileName,
+      file_path: filePath,
+      mime_type: "application/pdf",
+      registro_entrada_id: entry.id,
+    };
+    if (attachmentId) {
+      const { error } = await withTimeout(supabase.from("attachments").update(payload).eq("id", attachmentId), 12000);
+      if (error) throw error;
+    } else {
+      const { data, error } = await withTimeout(
+        supabase.from("attachments").insert(payload).select("id").single(),
+        12000
+      );
+      if (error) throw error;
+      attachmentId = data?.id || null;
+    }
+
+    const { error: updateError } = await withTimeout(
+      supabase.from("registros_entrada").update({
+        pdf_file_path: filePath,
+        main_attachment_id: attachmentId,
+        pdf_generated_at: new Date().toISOString(),
+      }).eq("id", entry.id),
+      12000
+    );
+    if (updateError) throw updateError;
+    return { fileName, filePath, attachmentId };
+  }
+
+  async function openEntryPdf(id) {
+    const { data: row } = await withTimeout(supabase.from("registros_entrada").select("pdf_file_path").eq("id", id).maybeSingle(),12000);
+    if (!row?.pdf_file_path) return showToast("Este registro aún no tiene PDF asociado.","warning");
+    const { data, error } = await withTimeout(supabase.storage.from(STORAGE_BUCKET).createSignedUrl(row.pdf_file_path,120),12000);
+    if (error) throw error;
+    if (data?.signedUrl) window.open(data.signedUrl,"_blank","noopener,noreferrer");
+  }
+
+  async function deleteEntryRecord(entryId) {
+    const entry = state.entryRecords.find((row) => row.id === entryId) || null;
+    const reCode = entry?.re_code || "desconocido";
+    const yes = window.confirm(
+      `¿Seguro que quieres eliminar definitivamente el registro ${reCode}? Esta acción borrará también su PDF y no se puede deshacer.`
+    );
+    if (!yes) return;
+
+    if (entry?.pdf_file_path) {
+      const { error: storageError } = await withTimeout(
+        supabase.storage.from(STORAGE_BUCKET).remove([entry.pdf_file_path]),
+        20000
+      );
+      if (storageError) {
+        const message = String(storageError.message || "").toLowerCase();
+        const isNotFound = message.includes("not found") || message.includes("no such file");
+        if (!isNotFound) {
+          showToast(
+            `No se pudo borrar el PDF de ${reCode}. Se cancela la eliminación para evitar archivos huérfanos.`,
+            "error",
+            4500
+          );
+          throw storageError;
+        }
+      }
+    }
+
+    const attachmentIds = new Set();
+    if (entry?.main_attachment_id) attachmentIds.add(entry.main_attachment_id);
+    const relatedAttachments = await withTimeout(
+      supabase.from("attachments").select("id").eq("registro_entrada_id", entryId),
+      12000
+    );
+    if (relatedAttachments.error) throw relatedAttachments.error;
+    for (const row of safeArray(relatedAttachments.data)) {
+      if (row?.id) attachmentIds.add(row.id);
+    }
+
+    if (attachmentIds.size) {
+      const { error: attachmentDeleteError } = await withTimeout(
+        supabase.from("attachments").delete().in("id", Array.from(attachmentIds)),
+        12000
+      );
+      if (attachmentDeleteError) throw attachmentDeleteError;
+    }
+
+    const { error: deleteError } = await withTimeout(
+      supabase.from("registros_entrada").delete().eq("id", entryId),
+      12000
+    );
+    if (deleteError) throw deleteError;
+
+    await fetchEntryRecords();
+    renderEntryRegistryList();
+    showToast(`Registro ${reCode} eliminado definitivamente.`, "success");
+  }
+
+  function renderEntryRegistryList() {
+    const q = normalizeLower(els.entryFilterInput?.value);
+    const y = Number(els.entryFilterYear?.value || 0);
+    const rows = state.entryRecords
+      .filter((r)=> !r.deleted_at)
+      .filter((r)=> !y || Number(r.entry_year)===y)
+      .filter((r)=>{
+        if(!q) return true;
+        const customer = state.customerMap.get(r.client_id) || null;
+        const name = customer ? customerDisplayName(customer, state.companyMapByCustomerId.get(r.client_id)||null) : "";
+        const hay = buildSearchHaystack([name, customer?.phone, r.re_code, r.device_title]);
+        return hay.includes(q);
+      })
+      .sort((a,b)=> state.entryUi.sortDescending ? (Number(b.re_number)-Number(a.re_number)) : (Number(a.re_number)-Number(b.re_number)));
+    if(!rows.length){ setHTML(els.entryList,""); show(els.entryListEmpty); return; }
+    hide(els.entryListEmpty);
+    setHTML(els.entryList, rows.map((r)=>`<article class="registry-item"><div><div class="list-item-title">${escapeHtml(r.re_code || "RE-") } · ${escapeHtml(r.device_title || "Sin título")}</div><div class="list-item-subtitle">${escapeHtml(formatDate(r.reception_date))}</div></div><div class="registry-item-actions"><button class="btn btn-ghost" data-entry-edit="${escapeHtml(r.id)}">Abrir/Editar</button><button class="btn btn-ghost" data-entry-pdf="${escapeHtml(r.id)}">Abrir PDF</button><button class="btn btn-danger" data-entry-delete="${escapeHtml(r.id)}">Eliminar</button></div></article>`).join(""));
+  }
 
   // =========================================
   // BIND PART 2 EVENTS
@@ -4529,6 +4842,18 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       });
     });
 
+    els.btnEntryNew?.addEventListener("click", () => { resetEntryForm({ keepOpen: true }); });
+    els.btnEntryClose?.addEventListener("click", () => resetEntryForm({ keepOpen: false }));
+    els.btnEntryReset?.addEventListener("click", () => resetEntryForm({ keepOpen: true }));
+    els.btnEntrySave?.addEventListener("click", () => { saveEntryRecord().catch(console.error); });
+    els.entryCustomerSearch?.addEventListener("input", debounce(() => renderEntryCustomerSearchResults(), 160));
+    els.entryCustomerResults?.addEventListener("click", (event) => { const item = event.target.closest("[data-entry-customer-pick]"); if (!item) return; setSelectedEntryCustomer(item.dataset.entryCustomerPick); renderEntryCustomerSearchResults(); });
+    els.btnEntryClearCustomer?.addEventListener("click", () => { setSelectedEntryCustomer(null); renderEntryCustomerSearchResults(); });
+    els.btnEntryCreateCustomer?.addEventListener("click", () => { navigateTo("create"); resetCustomerForm({ preservePanel: true }); });
+    els.entryFilterInput?.addEventListener("input", debounce(() => renderEntryRegistryList(), 180));
+    els.entryFilterYear?.addEventListener("input", () => renderEntryRegistryList());
+    els.btnEntryToggleOrder?.addEventListener("click", () => { state.entryUi.sortDescending = !state.entryUi.sortDescending; renderEntryRegistryList(); });
+
     document.removeEventListener("click", handleGlobalClick);
     document.addEventListener("click", handleGlobalClick);
   }
@@ -4542,7 +4867,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     state.isBootstrapping = true;
 
     try {
-      await Promise.all([fetchCustomersAndCompanies(), fetchTransactionsFull(), fetchExpenses()]);
+      await Promise.all([fetchCustomersAndCompanies(), fetchTransactionsFull(), fetchExpenses(), fetchEntryRecords()]);
       renderAllCoreViews();
       renderAccountingYearOptions();
       renderAccountingView();
