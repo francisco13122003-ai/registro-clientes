@@ -144,6 +144,9 @@
           <button class="nav-btn" data-nav="registry" type="button">
             Registro
           </button>
+          <button class="nav-btn" data-nav="entryRegistry" type="button">
+            Registro de entrada
+          </button>
           <button class="nav-btn" data-nav="accounting" type="button">
             Contabilidad
           </button>
@@ -213,6 +216,12 @@
               <div class="tile-subtitle">
                 Nombre · teléfono · CIF · razón social
               </div>
+            </button>
+
+            <button class="tile" data-nav="entryRegistry" type="button">
+              <span class="tile-badge">Entrada</span>
+              <div class="tile-title">Registro de entrada</div>
+              <div class="tile-subtitle">Recepción de dispositivos y seguimiento</div>
             </button>
 
             <button class="tile" data-nav="search" type="button">
@@ -1198,6 +1207,75 @@
           </div>
         </section>
 
+        
+
+        <section id="panelEntryRegistry" class="card panel hidden" aria-labelledby="panelEntryRegistryTitle">
+          <div class="panel-head">
+            <div>
+              <h2 id="panelEntryRegistryTitle">Registro de entrada</h2>
+              <p class="muted small">Módulo no fiscal para recepción de dispositivos.</p>
+            </div>
+            <div class="row">
+              <button id="btnEntryNew" class="btn btn-primary" type="button">Crear registro de entrada</button>
+            </div>
+          </div>
+
+          <section id="entryFormBox" class="subcard hidden">
+            <div class="panel-head">
+              <h3>Nuevo / editar registro de entrada</h3>
+              <div class="row">
+                <button id="btnEntryClose" class="btn btn-ghost" type="button">Cerrar</button>
+                <button id="btnEntryReset" class="btn btn-ghost" type="button">Limpiar campos</button>
+              </div>
+            </div>
+            <div class="grid2">
+              <div class="field">
+                <label for="entryCustomerSearch">Cliente (buscar)</label>
+                <input id="entryCustomerSearch" type="text" placeholder="Nombre, teléfono, CIF..." autocomplete="off" />
+                <div id="entryCustomerResults" class="mini-list" role="listbox"></div>
+              </div>
+              <div class="subcard subcard-tight selected-customer-card">
+                <div class="muted small">Cliente seleccionado</div>
+                <div id="entryCustomerSelected" class="bigline">—</div>
+                <div class="row row-spaced">
+                  <button id="btnEntryCreateCustomer" class="btn btn-ghost" type="button">Crear ficha</button>
+                  <button id="btnEntryClearCustomer" class="btn btn-ghost" type="button">Quitar</button>
+                </div>
+              </div>
+            </div>
+            <div class="grid2">
+              <div class="field"><label for="entryReceptionDate">Fecha de recepción</label><input id="entryReceptionDate" type="date" /></div>
+              <div class="field"><label for="entryExpectedDate">Plazo previsto</label><input id="entryExpectedDate" type="date" /></div>
+            </div>
+            <div class="grid2">
+              <div class="field"><label for="entryDeviceTitle">Concepto/aparato</label><input id="entryDeviceTitle" type="text" /></div>
+              <div class="field"><label for="entryBrand">Marca</label><input id="entryBrand" type="text" /></div>
+              <div class="field"><label for="entryModel">Modelo</label><input id="entryModel" type="text" /></div>
+              <div class="field"><label for="entrySerialNumber">Número de serie</label><input id="entrySerialNumber" type="text" /></div>
+            </div>
+            <div class="field"><label for="entryAccessories">Accesorios entregados</label><textarea id="entryAccessories"></textarea></div>
+            <div class="field"><label for="entryVisibleDamage">Daños visibles / estado físico</label><textarea id="entryVisibleDamage"></textarea></div>
+            <div class="field"><label for="entryPreliminaryDiagnosis">Diagnóstico previo o descripción</label><textarea id="entryPreliminaryDiagnosis"></textarea></div>
+            <div class="field"><label for="entryInternalNotes">Anotaciones internas (no salen en PDF)</label><textarea id="entryInternalNotes"></textarea></div>
+            <label><input id="entryWaivesEstimate" type="checkbox" checked /> Renuncia a presupuesto previo</label>
+            <div class="row">
+              <button id="btnEntrySave" class="btn btn-primary" type="button">Crear</button>
+            </div>
+          </section>
+
+          <section class="subcard">
+            <div class="grid2 grid2-compact">
+              <div class="field"><label for="entryFilterInput">Buscar</label><input id="entryFilterInput" type="text" placeholder="Cliente, teléfono, RE, aparato..." /></div>
+              <div class="field"><label for="entryFilterYear">Año</label><input id="entryFilterYear" type="number" min="2000" max="2100" placeholder="Todos" /></div>
+            </div>
+            <div class="row">
+              <button id="btnEntryToggleOrder" class="btn btn-ghost" type="button">Invertir listado</button>
+            </div>
+            <div id="entryList" class="list list-scroll"></div>
+            <div id="entryListEmpty" class="empty-box hidden">No hay registros de entrada.</div>
+          </section>
+        </section>
+
         <!-- DETAIL -->
         <section
           id="panelDetail"
@@ -1379,6 +1457,7 @@
 <script src="./fiscal-core.js"></script>
 <script src="./fiscal-ui.js"></script>
 <script src="./tx-pdf-service.js"></script>
+<script src="./entry-pdf-service.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="./app.js"></script>
   </body>
