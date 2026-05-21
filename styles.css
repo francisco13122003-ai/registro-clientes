@@ -1293,6 +1293,10 @@ input[type="checkbox"] {
   margin-left: 0;
 }
 
+#panelEntryRegistry .entry-list-actions {
+  margin-top: 14px;
+}
+
 .badge.online {
   border-color: rgba(43, 198, 112, 0.35);
   background: rgba(43, 198, 112, 0.1);
