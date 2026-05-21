@@ -97,16 +97,24 @@
       y += rowHeight;
     });
 
-    const legalFontSize = 6.8;
+    const legalFontSize = 6.7;
+    const legalLineStep = mm(2.55);
+    const legalTitleStep = mm(3.0);
+    const legalBlockGap = mm(1.4);
+    const legalBodyWidth = contentWidth;
+
     doc.setFontSize(legalFontSize);
-    const legalLabelWidth = mm(21);
-    const legalGap = mm(2);
-    const legalBodyWidth = contentWidth - legalLabelWidth - legalGap;
-    let legalHeight = 0;
-    LEGAL.forEach(([title, body]) => {
-      const lines = doc.splitTextToSize(body, legalBodyWidth);
-      legalHeight += Math.max(mm(3), lines.length * mm(2.9)) + mm(0.9);
+    const legalRows = LEGAL.map(([title, body]) => {
+      const titleLines = doc.splitTextToSize(`${title}:`, contentWidth);
+      const bodyLines = doc.splitTextToSize(body, legalBodyWidth);
+      const height =
+        titleLines.length * legalTitleStep +
+        bodyLines.length * legalLineStep +
+        legalBlockGap;
+
+      return { titleLines, bodyLines, height };
     });
+    const legalHeight = legalRows.reduce((sum, row) => sum + row.height, 0);
 
     const signLineToLabel = mm(3.8);
     const signBlockHeight = mm(9.5);
@@ -127,13 +135,14 @@
 
     let legalY = legalStart;
     doc.setFontSize(legalFontSize);
-    LEGAL.forEach(([title, body]) => {
-      const rest = doc.splitTextToSize(body, legalBodyWidth);
+    legalRows.forEach((row) => {
       doc.setFont('helvetica', 'bold');
-      doc.text(`${title}:`, margins.left, legalY);
+      doc.text(row.titleLines, margins.left, legalY);
+      legalY += row.titleLines.length * legalTitleStep;
+
       doc.setFont('helvetica', 'normal');
-      doc.text(rest, margins.left + legalLabelWidth + legalGap, legalY, { maxWidth: legalBodyWidth, lineHeightFactor: 1.12 });
-      legalY += Math.max(mm(3), rest.length * mm(2.9)) + mm(0.9);
+      doc.text(row.bodyLines, margins.left, legalY, { maxWidth: legalBodyWidth, lineHeightFactor: 1.12 });
+      legalY += row.bodyLines.length * legalLineStep + legalBlockGap;
     });
 
     return doc;
