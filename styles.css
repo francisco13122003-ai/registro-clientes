@@ -1311,3 +1311,9 @@ input[type="checkbox"] {
   gap: 12px;
   margin-bottom: 12px;
 }
+
+/* Registro de entrada: separación del botón de inversión respecto al buscador */
+#panelEntryRegistry .entry-toggle-order-row {
+  margin-top: 10px;
+}
+

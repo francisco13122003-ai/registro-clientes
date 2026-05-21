@@ -35,11 +35,9 @@
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const margins = { top: mm(18), right: mm(22), bottom: mm(18), left: mm(22) };
+    const margins = { top: mm(18), right: mm(22), bottom: mm(14), left: mm(22) };
     const contentWidth = pageWidth - margins.left - margins.right;
     let y = margins.top;
-
-    const ensure = (need) => { if (y + need <= pageHeight - margins.bottom) return; doc.addPage(); y = margins.top; };
 
     doc.setFillColor(...DARK_GRAY);
     doc.rect(margins.left, y, contentWidth, mm(18), 'F');
@@ -52,51 +50,90 @@
     doc.text(`Fecha: ${fmtDate(data.reception_date)}`, margins.left + contentWidth - mm(7), y + mm(13), { align: 'right' });
     y += mm(28);
 
-    doc.setTextColor(0,0,0);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
     doc.text('Empresa', margins.left, y);
     doc.text('Cliente', margins.left + contentWidth * 0.52, y);
     y += mm(4);
-    doc.setTextColor(...MID_GRAY); doc.line(margins.left, y, margins.left + contentWidth, y); doc.setTextColor(0,0,0); y += mm(5);
+    doc.setTextColor(...MID_GRAY);
+    doc.line(margins.left, y, margins.left + contentWidth, y);
+    doc.setTextColor(0, 0, 0);
+    y += mm(5);
 
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
     const left = [COMPANY.displayName, `NIF: ${COMPANY.nif}`, `Tel: ${COMPANY.phone}`, COMPANY.address, COMPANY.email];
     const right = [safe(data.customer_name), data.customer_phone ? `Tel: ${data.customer_phone}` : '', safe(data.customer_address)].filter(Boolean);
-    left.forEach((l,i)=> doc.text(l, margins.left, y + i*mm(4.6), { maxWidth: contentWidth*0.48 }));
-    right.forEach((l,i)=> doc.text(l, margins.left + contentWidth*0.52, y + i*mm(4.6), { maxWidth: contentWidth*0.46 }));
+    left.forEach((l, i) => doc.text(l, margins.left, y + i * mm(4.6), { maxWidth: contentWidth * 0.48 }));
+    right.forEach((l, i) => doc.text(l, margins.left + contentWidth * 0.52, y + i * mm(4.6), { maxWidth: contentWidth * 0.46 }));
     y += mm(26);
+
+    const labelWidth = mm(56);
+    const fieldGap = mm(6);
+    const valueX = margins.left + labelWidth + fieldGap;
+    const valueWidth = contentWidth - labelWidth - fieldGap;
+    const rowPaddingTop = mm(1.2);
+    const rowPaddingBottom = mm(1.6);
+    const minRowHeight = mm(6.4);
+    const lineHeightPt = 11;
 
     const fields = [
       ['Concepto/aparato', data.device_title], ['Marca', data.brand], ['Modelo', data.model], ['Nº Serie', data.serial_number],
-      ['Accesorios', data.accessories], ['Daños visibles / estado físico', data.visible_damage], ['Diagnóstico previo o descripción', data.preliminary_diagnosis], ['Plazo previsto', data.expected_delivery_date ? fmtDate(data.expected_delivery_date) : '—']
+      ['Accesorios', data.accessories], ['Daños visibles / estado físico', data.visible_damage], ['Diagnóstico previo o descripción', data.preliminary_diagnosis], ['Plazo previsto', data.expected_delivery_date ? fmtDate(data.expected_delivery_date) : '—'],
     ];
-    fields.forEach(([k,v]) => {
-      const lines = doc.splitTextToSize(String(v || '—'), contentWidth - mm(45));
-      ensure(mm(8) + lines.length * mm(4));
-      doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.text(`${k}:`, margins.left, y);
-      doc.setFont('helvetica','normal'); doc.text(lines, margins.left + mm(44), y, { maxWidth: contentWidth - mm(45) });
-      y += Math.max(mm(6), lines.length * mm(4.2));
+
+    doc.setFontSize(9.5);
+    fields.forEach(([k, v]) => {
+      const valueText = String(v || '—');
+      const lines = doc.splitTextToSize(valueText, valueWidth);
+      const rowHeight = Math.max(minRowHeight, rowPaddingTop + rowPaddingBottom + lines.length * (lineHeightPt / MM_TO_PT));
+
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${k}:`, margins.left, y + rowPaddingTop + mm(3.2), { maxWidth: labelWidth - mm(1) });
+      doc.setFont('helvetica', 'normal');
+      doc.text(lines, valueX, y + rowPaddingTop + mm(3.2), { maxWidth: valueWidth, lineHeightFactor: 1.15 });
+
+      y += rowHeight;
     });
 
-    ensure(mm(24));
-    y += mm(5);
-    doc.line(margins.left, y, margins.left + contentWidth * 0.42, y);
-    doc.line(margins.left + contentWidth * 0.58, y, margins.left + contentWidth, y);
-    y += mm(4);
-    doc.setFont('helvetica','bold'); doc.setFontSize(9);
-    doc.text('Firma cliente', margins.left, y);
-    doc.text('Flopitec Servicios Informaticos / autorizado', margins.left + contentWidth * 0.58, y);
-    y += mm(8);
-
-    doc.setFontSize(7.8);
+    const legalFontSize = 6.8;
+    doc.setFontSize(legalFontSize);
+    const legalLabelWidth = mm(21);
+    const legalGap = mm(2);
+    const legalBodyWidth = contentWidth - legalLabelWidth - legalGap;
+    let legalHeight = 0;
     LEGAL.forEach(([title, body]) => {
-      const t = `${title}: ${body}`;
-      const lines = doc.splitTextToSize(t, contentWidth);
-      ensure(lines.length * mm(3.2) + mm(2));
-      doc.setFont('helvetica','bold'); doc.text(`${title}:`, margins.left, y);
-      const rest = doc.splitTextToSize(body, contentWidth - mm(22));
-      doc.setFont('helvetica','normal'); doc.text(rest, margins.left + mm(20), y);
-      y += Math.max(mm(4), rest.length * mm(3.2)) + mm(1);
+      const lines = doc.splitTextToSize(body, legalBodyWidth);
+      legalHeight += Math.max(mm(3), lines.length * mm(2.9)) + mm(0.9);
+    });
+
+    const signLineToLabel = mm(3.8);
+    const signBlockHeight = mm(9.5);
+    const gapAfterSignatures = mm(2.5);
+    const legalStart = pageHeight - margins.bottom - legalHeight;
+    const signaturesTop = legalStart - gapAfterSignatures - signBlockHeight;
+
+    y = Math.min(y + mm(2), signaturesTop - mm(12));
+
+    doc.setDrawColor(...MID_GRAY);
+    doc.line(margins.left, signaturesTop, margins.left + contentWidth * 0.42, signaturesTop);
+    doc.line(margins.left + contentWidth * 0.58, signaturesTop, margins.left + contentWidth, signaturesTop);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text('Firma cliente', margins.left, signaturesTop + signLineToLabel);
+    doc.text('Flopitec Servicios Informaticos / autorizado', margins.left + contentWidth * 0.58, signaturesTop + signLineToLabel);
+
+    let legalY = legalStart;
+    doc.setFontSize(legalFontSize);
+    LEGAL.forEach(([title, body]) => {
+      const rest = doc.splitTextToSize(body, legalBodyWidth);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${title}:`, margins.left, legalY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(rest, margins.left + legalLabelWidth + legalGap, legalY, { maxWidth: legalBodyWidth, lineHeightFactor: 1.12 });
+      legalY += Math.max(mm(3), rest.length * mm(2.9)) + mm(0.9);
     });
 
     return doc;
