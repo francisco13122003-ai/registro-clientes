@@ -73,28 +73,40 @@
     const fieldGap = mm(6);
     const valueX = margins.left + labelWidth + fieldGap;
     const valueWidth = contentWidth - labelWidth - fieldGap;
-    const rowPaddingTop = mm(1.2);
-    const rowPaddingBottom = mm(1.6);
-    const minRowHeight = mm(6.4);
-    const lineHeightPt = 11;
+    const rowGap = mm(1.6);
+    const fieldLabelYOffset = mm(3.2);
+    const valueStartGap = mm(3.9);
+    const minValueLines = 1;
+    const lineHeightFactor = 1.15;
+
+    const drawDynamicFieldRow = ({ label, value, xLabel, xValue, yStart, maxWidth }) => {
+      const valueText = String(value || '—');
+      const valueLines = doc.splitTextToSize(valueText, maxWidth);
+      const lineHeightPt = doc.getFontSize() * lineHeightFactor;
+      const valueHeight = Math.max(minValueLines, valueLines.length) * lineHeightPt;
+
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${label}:`, xLabel, yStart + fieldLabelYOffset, { maxWidth: labelWidth - mm(1) });
+      doc.setFont('helvetica', 'normal');
+      doc.text(valueLines, xValue, yStart + fieldLabelYOffset, { maxWidth, lineHeightFactor });
+
+      return yStart + valueStartGap + valueHeight + rowGap;
+    };
 
     const fields = [
-      ['Concepto/aparato', data.device_title], ['Marca', data.brand], ['Modelo', data.model], ['Nº Serie', data.serial_number],
-      ['Accesorios', data.accessories], ['Daños visibles / estado físico', data.visible_damage], ['Diagnóstico previo o descripción', data.preliminary_diagnosis], ['Plazo previsto', data.expected_delivery_date ? fmtDate(data.expected_delivery_date) : '—'],
+      ['Concepto/aparato', data.device_title],
+      ['Marca', data.brand],
+      ['Modelo', data.model],
+      ['Nº Serie', data.serial_number],
+      ['Accesorios', data.accessories],
+      ['Daños visibles / estado físico', data.visible_damage],
+      ['Diagnóstico previo o descripción', data.preliminary_diagnosis],
+      ['Plazo previsto', data.expected_delivery_date ? fmtDate(data.expected_delivery_date) : '—'],
     ];
 
     doc.setFontSize(9.5);
-    fields.forEach(([k, v]) => {
-      const valueText = String(v || '—');
-      const lines = doc.splitTextToSize(valueText, valueWidth);
-      const rowHeight = Math.max(minRowHeight, rowPaddingTop + rowPaddingBottom + lines.length * (lineHeightPt / MM_TO_PT));
-
-      doc.setFont('helvetica', 'bold');
-      doc.text(`${k}:`, margins.left, y + rowPaddingTop + mm(3.2), { maxWidth: labelWidth - mm(1) });
-      doc.setFont('helvetica', 'normal');
-      doc.text(lines, valueX, y + rowPaddingTop + mm(3.2), { maxWidth: valueWidth, lineHeightFactor: 1.15 });
-
-      y += rowHeight;
+    fields.forEach(([label, value]) => {
+      y = drawDynamicFieldRow({ label, value, xLabel: margins.left, xValue: valueX, yStart: y, maxWidth: valueWidth });
     });
 
     const legalFontSize = 6.7;
