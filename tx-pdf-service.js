@@ -552,6 +552,7 @@
     drawConceptRows();
     drawSubtotal();
     drawIvaTotalBar();
+    drawSalesLegalNotice();
     drawSignatureAndBank();
     drawSalesLegalNotice();
 
