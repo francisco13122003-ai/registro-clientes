@@ -73,28 +73,53 @@
     const fieldGap = mm(6);
     const valueX = margins.left + labelWidth + fieldGap;
     const valueWidth = contentWidth - labelWidth - fieldGap;
-    const rowPaddingTop = mm(1.2);
-    const rowPaddingBottom = mm(1.6);
-    const minRowHeight = mm(6.4);
-    const lineHeightPt = 11;
+    const rowGap = mm(1.6);
+    const fieldLabelYOffset = mm(3.2);
+    const valueStartGap = mm(3.9);
+    const minValueLines = 1;
+    const lineHeightFactor = 1.15;
+
+    const splitFieldText = (value, maxWidth) => {
+      const text = String(value || '—');
+      return text
+        .split(/\r?\n/)
+        .flatMap((paragraph) => {
+          if (paragraph === '') return [''];
+          const paragraphLines = doc.splitTextToSize(paragraph, maxWidth);
+          return paragraphLines.length ? paragraphLines : [''];
+        });
+    };
+
+    const drawDynamicFieldRow = ({ label, value, xLabel, xValue, yStart, maxWidth }) => {
+      const labelLines = doc.splitTextToSize(`${label}:`, labelWidth - mm(1));
+      const valueLines = splitFieldText(value, maxWidth);
+      const lineHeight = doc.getFontSize() * lineHeightFactor;
+      const renderedLineCount = Math.max(minValueLines, valueLines.length);
+      const labelLineCount = Math.max(minValueLines, labelLines.length);
+      const rowContentHeight = Math.max(renderedLineCount, labelLineCount) * lineHeight;
+
+      doc.setFont('helvetica', 'bold');
+      doc.text(labelLines, xLabel, yStart + fieldLabelYOffset, { lineHeightFactor });
+      doc.setFont('helvetica', 'normal');
+      doc.text(valueLines, xValue, yStart + fieldLabelYOffset, { lineHeightFactor });
+
+      return yStart + valueStartGap + rowContentHeight + rowGap;
+    };
 
     const fields = [
-      ['Concepto/aparato', data.device_title], ['Marca', data.brand], ['Modelo', data.model], ['Nº Serie', data.serial_number],
-      ['Accesorios', data.accessories], ['Daños visibles / estado físico', data.visible_damage], ['Diagnóstico previo o descripción', data.preliminary_diagnosis], ['Plazo previsto', data.expected_delivery_date ? fmtDate(data.expected_delivery_date) : '—'],
+      ['Concepto/aparato', data.device_title],
+      ['Marca', data.brand],
+      ['Modelo', data.model],
+      ['Nº Serie', data.serial_number],
+      ['Accesorios', data.accessories],
+      ['Daños visibles / estado físico', data.visible_damage],
+      ['Diagnóstico previo o descripción', data.preliminary_diagnosis],
+      ['Plazo previsto', data.expected_delivery_date ? fmtDate(data.expected_delivery_date) : '—'],
     ];
 
     doc.setFontSize(9.5);
-    fields.forEach(([k, v]) => {
-      const valueText = String(v || '—');
-      const lines = doc.splitTextToSize(valueText, valueWidth);
-      const rowHeight = Math.max(minRowHeight, rowPaddingTop + rowPaddingBottom + lines.length * (lineHeightPt / MM_TO_PT));
-
-      doc.setFont('helvetica', 'bold');
-      doc.text(`${k}:`, margins.left, y + rowPaddingTop + mm(3.2), { maxWidth: labelWidth - mm(1) });
-      doc.setFont('helvetica', 'normal');
-      doc.text(lines, valueX, y + rowPaddingTop + mm(3.2), { maxWidth: valueWidth, lineHeightFactor: 1.15 });
-
-      y += rowHeight;
+    fields.forEach(([label, value]) => {
+      y = drawDynamicFieldRow({ label, value, xLabel: margins.left, xValue: valueX, yStart: y, maxWidth: valueWidth });
     });
 
     const legalFontSize = 6.7;
