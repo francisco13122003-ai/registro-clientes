@@ -460,11 +460,11 @@
       const paragraphs = Array.isArray(legal?.paragraphs) ? legal.paragraphs.filter(Boolean) : [];
       if (!title && !paragraphs.length) return;
 
-      const fontSize = 6.5;
+      const fontSize = 6.0;
       const titleLineStep = mm(3.1);
       const bodyLineStep = mm(2.9);
       const paragraphGap = mm(1.4);
-      const topGap = mm(7);
+      const topGap = mm(3.5);
       const textWidth = contentWidth;
 
       doc.setFont('helvetica', 'bold');
@@ -554,6 +554,7 @@
     drawIvaTotalBar();
     drawSalesLegalNotice();
     drawSignatureAndBank();
+    drawSalesLegalNotice();
 
     return doc;
   }
