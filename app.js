@@ -3909,35 +3909,88 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       }
 
       const tx = state.transactions.find((row) => row.id === id) || null;
+      const txCode = getStoredTransactionCode(tx);
+      console.info("[tx-delete] start", { txId: id, txCode });
+
       const { data: attachments, error: attachmentsError } = await withTimeout(
         supabase
           .from("attachments")
           .select("id, file_path, file_name, attachment_kind, generated_by_system")
           .eq("transaction_id", id),
-        12000
+        18000
       );
-      if (attachmentsError) throw attachmentsError;
 
-      const paths = new Set(
-        safeArray(attachments)
-          .map((row) => normalizeStoragePath(row?.file_path))
-          .filter(Boolean)
-      );
-      const txCode = getStoredTransactionCode(tx);
-      if (txCode) {
-        paths.add(`transactions/${id}/${txCode}.pdf`);
+      if (attachmentsError) {
+        throw attachmentsError;
       }
-      if (paths.size) {
-        const { error: removeError } = await withTimeout(
-          supabase.storage.from(STORAGE_BUCKET).remove(Array.from(paths)),
+
+      console.info("[tx-delete] attachments-found", {
+        txId: id,
+        count: safeArray(attachments).length,
+        attachments,
+      });
+
+      const normalizedPaths = safeArray(attachments)
+        .map((row) => normalizeStoragePath(row?.file_path))
+        .map((path) =>
+          String(path || "")
+            .replace(/^\/+/, "")
+            .replace(/^customer-files\/+/i, "")
+        )
+        .filter((path) => !!path);
+
+      if (txCode) {
+        normalizedPaths.push(`transactions/${id}/${txCode}.pdf`);
+      }
+
+      const paths = uniqueBy(normalizedPaths, (path) => path);
+
+      console.info("[tx-delete] storage-paths", { txId: id, paths });
+
+      if (paths.length > 0) {
+        const { data: removeData, error: removeError } = await withTimeout(
+          supabase.storage.from(STORAGE_BUCKET).remove(paths),
           20000
         );
-        if (removeError) throw removeError;
+
+        console.info("[tx-delete] storage-remove-result", {
+          txId: id,
+          pathsCount: paths.length,
+          removeData,
+          removeError,
+        });
+
+        if (removeError) {
+          const message = String(removeError?.message || removeError || "");
+          const isBlockingStorageError =
+            /permission|rls|unauthorized|forbidden|bucket/i.test(message);
+          const isMissingStorageObject =
+            /not found|no such|does not exist|404/i.test(message);
+
+          if (isBlockingStorageError || !isMissingStorageObject) {
+            throw new Error(
+              `No se pudieron borrar archivos en Storage: ${message || "error desconocido"}`
+            );
+          }
+        }
+      } else {
+        console.info("[tx-delete] no-valid-paths-skip-storage-remove", { txId: id });
       }
 
-      const { error } = await withTimeout(supabase.from("transactions").delete().eq("id", id), 18000);
+      const { data: deleteData, error } = await withTimeout(
+        supabase.from("transactions").delete().eq("id", id).select("id"),
+        18000
+      );
 
-      if (error) throw error;
+      console.info("[tx-delete] transactions-delete-result", {
+        txId: id,
+        deleteData,
+        error,
+      });
+
+      if (error) {
+        throw error;
+      }
 
       await fetchTransactionsFull();
       await fetchEntryRecords().catch(console.error);
