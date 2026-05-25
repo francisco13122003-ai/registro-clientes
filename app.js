@@ -253,6 +253,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     registryFilterInput: $("registryFilterInput"),
     registryDateFrom: $("registryDateFrom"),
     registryDateTo: $("registryDateTo"),
+    registryFilterYear: $("registryFilterYear"),
     registryVisibleCount: $("registryVisibleCount"),
     registryVisibleAmount: $("registryVisibleAmount"),
     regTabButtons: [...document.querySelectorAll("[data-regtab]")],
@@ -422,6 +423,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       lastFilterText: "",
       lastDateFrom: "",
       lastDateTo: "",
+      yearFilter: "",
       sortDescending: true,
     },
 
@@ -3946,15 +3948,58 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
   // =========================================
   // REGISTRY RENDER
   // =========================================
+  function getTransactionYear(tx) {
+    const rawDate = normalize(tx?.tx_date);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+      return Number(rawDate.slice(0, 4));
+    }
+
+    const code = normalize(tx?.tx_code).toUpperCase();
+    const match = code.match(/-(\d{2})$/);
+    if (!match) return null;
+    const shortYear = Number(match[1]);
+    if (!Number.isFinite(shortYear)) return null;
+    return 2000 + shortYear;
+  }
+
+  function getRegistryAvailableYears(kind) {
+    const years = new Set();
+    state.transactions
+      .filter((tx) => tx.kind === kind)
+      .forEach((tx) => {
+        const year = getTransactionYear(tx);
+        if (Number.isFinite(year)) years.add(year);
+      });
+
+    return [...years].sort((a, b) => b - a);
+  }
+
+  function syncRegistryYearFilterOptions() {
+    if (!els.registryFilterYear) return;
+    const years = getRegistryAvailableYears(state.registry.currentKind);
+    const selected = normalize(els.registryFilterYear.value || state.registry.yearFilter);
+    const validSelected = selected && years.includes(Number(selected)) ? selected : "";
+
+    setHTML(
+      els.registryFilterYear,
+      [`<option value="">Todos</option>`, ...years.map((year) => `<option value="${year}">${year}</option>`)].join("")
+    );
+
+    els.registryFilterYear.value = validSelected;
+    state.registry.yearFilter = validSelected;
+  }
+
   function getRegistryFilteredTransactions() {
     const kind = state.registry.currentKind;
     const filterText = normalizeLower(els.registryFilterInput?.value);
     const dateFrom = normalize(els.registryDateFrom?.value);
     const dateTo = normalize(els.registryDateTo?.value);
+    const yearFilter = normalize(els.registryFilterYear?.value || state.registry.yearFilter);
 
     state.registry.lastFilterText = filterText;
     state.registry.lastDateFrom = dateFrom;
     state.registry.lastDateTo = dateTo;
+    state.registry.yearFilter = yearFilter;
 
     let rows = state.transactions.filter((tx) => tx.kind === kind);
 
@@ -3968,6 +4013,10 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
     if (dateTo) {
       rows = rows.filter((tx) => String(tx.tx_date || "") <= dateTo);
+    }
+
+    if (yearFilter) {
+      rows = rows.filter((tx) => String(getTransactionYear(tx) || "") === yearFilter);
     }
 
     if (filterText) {
@@ -3999,6 +4048,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     if (!els.txList) return;
 
     updateRegistrySortDirectionUI();
+    syncRegistryYearFilterOptions();
 
     const rows = getRegistryFilteredTransactions();
 
@@ -4826,6 +4876,11 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     });
 
     els.registryDateTo?.addEventListener("change", () => {
+      renderRegistryList();
+    });
+
+    els.registryFilterYear?.addEventListener("change", () => {
+      state.registry.yearFilter = normalize(els.registryFilterYear.value);
       renderRegistryList();
     });
 
