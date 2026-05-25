@@ -1037,7 +1037,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
         supabase
           .from("expenses")
           .select("*")
-          .order("fecha", { ascending: false })
+          .order("expense_date", { ascending: false })
           .order("created_at", { ascending: false })
           .limit(2000),
         15000
@@ -1153,7 +1153,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
   function filterExpensesRows() {
     const { year, quarter, category, deductible } = getExpenseFilters();
     return state.expenses.filter((exp) => {
-      const fecha = String(exp.fecha || "");
+      const fecha = String(exp.expense_date || "");
       if (year && !fecha.startsWith(`${year}-`)) return false;
       if (quarter) {
         const d = parseISODate(fecha);
@@ -1163,7 +1163,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       if (deductible === "true" && !exp.deducible) return false;
       if (deductible === "false" && !!exp.deducible) return false;
       return true;
-    }).sort((a,b)=>String(b.fecha||"").localeCompare(String(a.fecha||"")));
+    }).sort((a,b)=>String(b.expense_date||"").localeCompare(String(a.expense_date||"")));
   }
 
   function renderExpensesList() {
@@ -1184,7 +1184,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
         <article class="list-item">
           <div class="list-item-main">
             <div class="list-item-title">${escapeHtml(exp.concepto || "Sin concepto")}</div>
-            <div class="list-item-subtitle">${escapeHtml(formatDate(exp.fecha))} · ${escapeHtml(exp.categoria || "Sin categoría")} · ${escapeHtml(exp.proveedor || "Sin proveedor")}</div>
+            <div class="list-item-subtitle">${escapeHtml(formatDate(exp.expense_date))} · ${escapeHtml(exp.categoria || "Sin categoría")} · ${escapeHtml(exp.proveedor || "Sin proveedor")}</div>
             <div class="list-item-meta">
               <span class="pill">Base ${escapeHtml(euro(exp.base_imponible || 0))}</span>
               <span class="pill">IVA ${escapeHtml(euro(exp.iva_importe || 0))}</span>
@@ -1208,7 +1208,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     show(els.expenseFormBox);
     setText(els.expenseFormTitle, "Editar gasto");
     show(els.btnExpenseDelete);
-    if (els.expenseDate) els.expenseDate.value = exp.fecha || todayISO();
+    if (els.expenseDate) els.expenseDate.value = exp.expense_date || todayISO();
     if (els.expenseConcept) els.expenseConcept.value = exp.concepto || "";
     if (els.expenseCategory) els.expenseCategory.value = exp.categoria || "";
     if (els.expenseProvider) els.expenseProvider.value = exp.proveedor || "";
@@ -1223,7 +1223,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
 
   function collectExpensePayload() {
     return {
-      fecha: normalize(els.expenseDate?.value) || todayISO(),
+      expense_date: normalize(els.expenseDate?.value) || todayISO(),
       concepto: normalize(els.expenseConcept?.value),
       categoria: normalize(els.expenseCategory?.value) || null,
       proveedor: normalize(els.expenseProvider?.value) || null,
@@ -1237,7 +1237,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
   }
 
   function validateExpensePayload(payload) {
-    if (!payload.fecha) return "La fecha es obligatoria.";
+    if (!payload.expense_date) return "La fecha es obligatoria.";
     if (!payload.concepto) return "El concepto es obligatorio.";
     return "";
   }
