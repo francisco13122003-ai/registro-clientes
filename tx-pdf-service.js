@@ -112,7 +112,6 @@
 
   function buildPdfData({ tx, items, customer, company, txCode }) {
     const recipient = buildRecipientBlock(customer, company);
-    const isInvoice = tx?.kind === 'factura';
     const concepts = normalizeConceptLines(tx, items);
 
     // Regla de negocio (2026-03): cada concepto ya viene con IVA incluido.
@@ -131,7 +130,6 @@
     return {
       docTitle: recipient.title,
       recipient,
-      isInvoice,
       txDate: tx?.tx_date || '',
       txCode: txCode || '',
       concepts,
@@ -269,10 +267,8 @@
         ['NOMBRE:', data.recipient.name || ''],
         ['DIRECCION:', data.recipient.address || ''],
         ['CP/CIUDAD:', data.recipient.cityLine || ''],
+        ['CIF/NIF:', data.recipient.nif || ''],
       ];
-      if (data.isInvoice) {
-        customerFields.push(['CIF/NIF:', data.recipient.nif || '']);
-      }
 
       customerFields.forEach(([label, value]) => {
         doc.setFont('helvetica', 'bold');
@@ -425,7 +421,7 @@
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11.5);
-      doc.text(data.isInvoice ? 'TOTAL FACTURA' : 'TOTAL', rightBlockX + mm(3), y + mm(12.7));
+      doc.text('TOTAL FACTURA', rightBlockX + mm(3), y + mm(12.7));
       doc.setFontSize(13.5);
       doc.text(formatMoneyEs(data.total), rightBlockX + rightBlockW - mm(3), y + mm(12.9), { align: 'right' });
 
