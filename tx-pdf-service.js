@@ -12,6 +12,20 @@
   const MID_GRAY = [140, 140, 140];
   const WHITE = [255, 255, 255];
 
+
+  const SALES_LEGAL_NOTICE = Object.freeze({
+    title: 'CONDICIONES Y GARANTÍAS',
+    paragraphs: [
+      'Conserve este documento para cualquier gestión de garantía, cambio o reclamación.',
+      'Los productos nuevos cuentan con la garantía legal mínima vigente. Los productos reacondicionados o de segunda mano quedan cubiertos por la garantía legal aplicable, salvo pacto específico documentado.',
+      'La garantía cubre faltas de conformidad del producto. No cubre daños por golpes, líquidos, mal uso, manipulación no autorizada, desgaste normal, instalación incorrecta ajena a la empresa, virus/software, pérdida de datos ni pérdida de accesorios.',
+      'Las reparaciones, instalaciones o intervenciones técnicas realizadas por el establecimiento cuentan con una garantía mínima legal de 3 meses sobre la intervención efectuada.',
+      'En compras presenciales, los cambios o devoluciones comerciales solo se admitirán cuando procedan según la política del establecimiento o por garantía legal. No se admitirán cambios de software, licencias activadas, consumibles abiertos, productos personalizados, bajo pedido o manipulados, salvo defecto cubierto por garantía legal.',
+      'El cliente es responsable de realizar copia de seguridad de sus datos antes de cualquier instalación, reparación o manipulación del equipo, salvo contratación expresa de dicho servicio.',
+      'Existen hojas de quejas y reclamaciones a disposición de las personas consumidoras.',
+    ],
+  });
+
   const FLOPITEC_LEGAL = Object.freeze({
     displayName: 'FLOPITEC SERVICIOS INFORMÁTICOS',
     razonSocial: 'Luis Alemán Caballero',
@@ -147,6 +161,7 @@
       showRecipientTaxId: isInvoice,
       companyIssuer: FLOPITEC_LEGAL,
       bankInfoLines: FLOPITEC_LEGAL.bankInfoLines || [],
+      salesLegalNotice: SALES_LEGAL_NOTICE,
     };
   }
 
@@ -438,6 +453,56 @@
       y += barHeight;
     };
 
+
+    const drawSalesLegalNotice = () => {
+      const legal = data.salesLegalNotice || SALES_LEGAL_NOTICE;
+      const title = String(legal?.title || '').trim();
+      const paragraphs = Array.isArray(legal?.paragraphs) ? legal.paragraphs.filter(Boolean) : [];
+      if (!title && !paragraphs.length) return;
+
+      const fontSize = 6.5;
+      const titleLineStep = mm(3.1);
+      const bodyLineStep = mm(2.9);
+      const paragraphGap = mm(1.4);
+      const topGap = mm(7);
+      const textWidth = contentWidth;
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(fontSize);
+      const titleLines = title ? doc.splitTextToSize(title, textWidth) : [];
+
+      doc.setFont('helvetica', 'normal');
+      const paragraphRows = paragraphs.map((paragraph) => {
+        const lines = doc.splitTextToSize(String(paragraph), textWidth);
+        return { lines: lines.length ? lines : [''] };
+      });
+
+      const titleHeight = titleLines.length * titleLineStep;
+      const bodyHeight = paragraphRows.reduce(
+        (sum, row, index) => sum + row.lines.length * bodyLineStep + (index < paragraphRows.length - 1 ? paragraphGap : 0),
+        0
+      );
+      const totalHeight = topGap + titleHeight + bodyHeight;
+
+      ensureSpace(totalHeight + mm(2), false);
+
+      y += topGap;
+      if (titleLines.length) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(fontSize);
+        doc.text(titleLines, margins.left, y);
+        y += titleHeight;
+      }
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(fontSize);
+      paragraphRows.forEach((row, index) => {
+        doc.text(row.lines, margins.left, y, { maxWidth: textWidth, lineHeightFactor: 1.05 });
+        y += row.lines.length * bodyLineStep;
+        if (index < paragraphRows.length - 1) y += paragraphGap;
+      });
+    };
+
     const drawSignatureAndBank = () => {
       y += mm(10);
 
@@ -487,6 +552,7 @@
     drawConceptRows();
     drawSubtotal();
     drawIvaTotalBar();
+    drawSalesLegalNotice();
     drawSignatureAndBank();
 
     return doc;
