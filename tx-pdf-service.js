@@ -32,7 +32,8 @@
     nif: '24255871W',
     direccion: 'C/ Pablo Iglesias 30 Bajo, 18140, La Zubia, Granada',
     actividad: '',
-    telefono: '',
+    telefono: '958 891 822 / 609 917 893',
+    whatsapp: '642 663 026',
     email: '',
     bankInfoLines: [],
   });
@@ -256,7 +257,8 @@
           data.showIssuerTaxId && data.companyIssuer.nif ? `NIF/CIF: ${data.companyIssuer.nif}` : '',
           data.companyIssuer.actividad ? `Actividad: ${data.companyIssuer.actividad}` : '',
         ].filter(Boolean).join(' · '),
-        data.companyIssuer.telefono ? `Teléfono: ${data.companyIssuer.telefono}` : '',
+        data.companyIssuer.telefono ? `Tel: ${data.companyIssuer.telefono}` : '',
+        data.companyIssuer.whatsapp ? `WhatsApp: ${data.companyIssuer.whatsapp}` : '',
         data.companyIssuer.email ? `Email: ${data.companyIssuer.email}` : '',
       ].filter(Boolean);
 
