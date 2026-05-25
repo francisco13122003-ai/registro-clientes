@@ -4691,7 +4691,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       .sort((a,b)=> state.entryUi.sortDescending ? (Number(b.re_number)-Number(a.re_number)) : (Number(a.re_number)-Number(b.re_number)));
     if(!rows.length){ setHTML(els.entryList,""); show(els.entryListEmpty); return; }
     hide(els.entryListEmpty);
-    setHTML(els.entryList, rows.map((r)=>`<article class="registry-item"><div><div class="list-item-title">${escapeHtml(r.re_code || "RE-") } · ${escapeHtml(r.device_title || "Sin título")}</div><div class="list-item-subtitle">${escapeHtml(formatDate(r.reception_date))}</div></div><div class="registry-item-actions"><button class="btn btn-ghost" data-entry-edit="${escapeHtml(r.id)}">Abrir/Editar</button><button class="btn btn-ghost" data-entry-pdf="${escapeHtml(r.id)}">Abrir PDF</button><button class="btn btn-danger" data-entry-delete="${escapeHtml(r.id)}">Eliminar</button></div></article>`).join(""));
+    setHTML(els.entryList, rows.map((r)=>`<article class="registry-item"><div><div class="list-item-title">${escapeHtml(r.re_code || "RE-") } · ${escapeHtml(r.device_title || "Sin título")}</div><div class="list-item-subtitle">${escapeHtml(formatDate(r.reception_date))}</div></div><div class="registry-item-actions entry-registry-actions"><button class="btn btn-ghost" data-entry-edit="${escapeHtml(r.id)}">Abrir/Editar</button><button class="btn btn-ghost" data-entry-pdf="${escapeHtml(r.id)}">Abrir PDF</button><button class="btn btn-danger" data-entry-delete="${escapeHtml(r.id)}">Eliminar</button></div></article>`).join(""));
   }
 
   // =========================================

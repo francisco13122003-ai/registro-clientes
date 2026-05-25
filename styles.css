@@ -831,6 +831,12 @@ input[type="checkbox"] {
   min-width: 78px;
 }
 
+.entry-registry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .pending-record-item {
   padding: 11px 12px;
   gap: 10px;
@@ -1316,4 +1322,3 @@ input[type="checkbox"] {
 #panelEntryRegistry .entry-toggle-order-row {
   margin-top: 10px;
 }
-
