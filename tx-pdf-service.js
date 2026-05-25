@@ -143,6 +143,7 @@
       total,
       isInvoice,
       totalLabel: isInvoice ? 'TOTAL FACTURA' : 'TOTAL',
+      showIssuerTaxId: isInvoice,
       showRecipientTaxId: isInvoice,
       companyIssuer: FLOPITEC_LEGAL,
       bankInfoLines: FLOPITEC_LEGAL.bankInfoLines || [],
@@ -237,7 +238,7 @@
         data.companyIssuer.direccion,
         data.companyIssuer.razonSocial,
         [
-          data.companyIssuer.nif ? `NIF/CIF: ${data.companyIssuer.nif}` : '',
+          data.showIssuerTaxId && data.companyIssuer.nif ? `NIF/CIF: ${data.companyIssuer.nif}` : '',
           data.companyIssuer.actividad ? `Actividad: ${data.companyIssuer.actividad}` : '',
         ].filter(Boolean).join(' · '),
         data.companyIssuer.telefono ? `Teléfono: ${data.companyIssuer.telefono}` : '',
