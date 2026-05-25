@@ -79,18 +79,31 @@
     const minValueLines = 1;
     const lineHeightFactor = 1.15;
 
+    const splitFieldText = (value, maxWidth) => {
+      const text = String(value || '—');
+      return text
+        .split(/\r?\n/)
+        .flatMap((paragraph) => {
+          if (paragraph === '') return [''];
+          const paragraphLines = doc.splitTextToSize(paragraph, maxWidth);
+          return paragraphLines.length ? paragraphLines : [''];
+        });
+    };
+
     const drawDynamicFieldRow = ({ label, value, xLabel, xValue, yStart, maxWidth }) => {
-      const valueText = String(value || '—');
-      const valueLines = doc.splitTextToSize(valueText, maxWidth);
-      const lineHeightPt = doc.getFontSize() * lineHeightFactor;
-      const valueHeight = Math.max(minValueLines, valueLines.length) * lineHeightPt;
+      const labelLines = doc.splitTextToSize(`${label}:`, labelWidth - mm(1));
+      const valueLines = splitFieldText(value, maxWidth);
+      const lineHeight = doc.getFontSize() * lineHeightFactor;
+      const renderedLineCount = Math.max(minValueLines, valueLines.length);
+      const labelLineCount = Math.max(minValueLines, labelLines.length);
+      const rowContentHeight = Math.max(renderedLineCount, labelLineCount) * lineHeight;
 
       doc.setFont('helvetica', 'bold');
-      doc.text(`${label}:`, xLabel, yStart + fieldLabelYOffset, { maxWidth: labelWidth - mm(1) });
+      doc.text(labelLines, xLabel, yStart + fieldLabelYOffset, { lineHeightFactor });
       doc.setFont('helvetica', 'normal');
-      doc.text(valueLines, xValue, yStart + fieldLabelYOffset, { maxWidth, lineHeightFactor });
+      doc.text(valueLines, xValue, yStart + fieldLabelYOffset, { lineHeightFactor });
 
-      return yStart + valueStartGap + valueHeight + rowGap;
+      return yStart + valueStartGap + rowContentHeight + rowGap;
     };
 
     const fields = [
