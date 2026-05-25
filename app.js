@@ -253,6 +253,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     registryFilterInput: $("registryFilterInput"),
     registryDateFrom: $("registryDateFrom"),
     registryDateTo: $("registryDateTo"),
+    registryFilterYear: $("registryFilterYear"),
     registryVisibleCount: $("registryVisibleCount"),
     registryVisibleAmount: $("registryVisibleAmount"),
     regTabButtons: [...document.querySelectorAll("[data-regtab]")],
@@ -422,6 +423,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       lastFilterText: "",
       lastDateFrom: "",
       lastDateTo: "",
+      lastYear: "",
       sortDescending: true,
     },
 
@@ -2637,6 +2639,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     }
 
     renderTxDraftItems();
+    renderRegistryYearOptions();
     renderRegistryList();
   }
 
@@ -3682,35 +3685,22 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
           : getClientRequestId("tx");
 
       if (!txId) {
-        const txYear = getTxYearSuffix(txPayload);
         let inserted = null;
         let lastError = null;
 
-        for (let attempt = 0; attempt < 3; attempt += 1) {
-          const reservedCode = await reserveNextTransactionCode(txPayload.kind, txYear);
-          const { data, error } = await withTimeout(
-            supabase
-              .from("transactions")
-              .insert({
-                ...txPayload,
-                tx_code: reservedCode,
-                client_request_id: clientRequestId,
-              })
-              .select("id, tx_code")
-              .single(),
-            18000
-          );
-
-          if (!error && data?.id) {
-            inserted = data;
-            break;
-          }
-
-          lastError = error;
-          const low = String(error?.message || "").toLowerCase();
-          const isTxCodeConflict = low.includes("tx_code") && low.includes("duplicate");
-          if (!isTxCodeConflict) break;
-        }
+        const { data, error } = await withTimeout(
+          supabase
+            .from("transactions")
+            .insert({
+              ...txPayload,
+              client_request_id: clientRequestId,
+            })
+            .select("id, tx_code")
+            .single(),
+          18000
+        );
+        inserted = data || null;
+        lastError = error || null;
 
         if (!inserted) throw lastError || new Error("No se pudo reservar un identificador único.");
         txId = inserted.id;
@@ -3891,14 +3881,10 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     let txId = editingTxId || null;
 
     if (!txId) {
-      const txYear = getTxYearSuffix(txPayload);
-      const reservedCode = await reserveNextTransactionCode(txPayload.kind, txYear);
-
       const { data, error } = await supabase
         .from("transactions")
         .insert({
           ...txPayload,
-          tx_code: reservedCode,
           client_request_id: clientRequestId || getClientRequestId("tx"),
         })
         .select("id, tx_code")
@@ -3906,7 +3892,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
       if (error) throw error;
       txId = data.id;
-      txPayload.tx_code = normalizeTxCode(data?.tx_code || reservedCode);
+      txPayload.tx_code = normalizeTxCode(data?.tx_code || "");
     } else {
       const { error } = await supabase
         .from("transactions")
@@ -3951,10 +3937,12 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     const filterText = normalizeLower(els.registryFilterInput?.value);
     const dateFrom = normalize(els.registryDateFrom?.value);
     const dateTo = normalize(els.registryDateTo?.value);
+    const selectedYear = normalize(els.registryFilterYear?.value);
 
     state.registry.lastFilterText = filterText;
     state.registry.lastDateFrom = dateFrom;
     state.registry.lastDateTo = dateTo;
+    state.registry.lastYear = selectedYear;
 
     let rows = state.transactions.filter((tx) => tx.kind === kind);
 
@@ -3968,6 +3956,16 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
     if (dateTo) {
       rows = rows.filter((tx) => String(tx.tx_date || "") <= dateTo);
+    }
+
+    if (selectedYear) {
+      rows = rows.filter((tx) => {
+        const parsedDate = parseDateSafe(tx.tx_date || tx.created_at);
+        if (parsedDate) return String(parsedDate.getFullYear()) === selectedYear;
+        const code = normalizeTxCode(tx.tx_code);
+        const match = code.match(/-(\d{2})(?:-.+)?$/);
+        return match ? String(2000 + Number(match[1])) === selectedYear : false;
+      });
     }
 
     if (filterText) {
@@ -3993,6 +3991,35 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     }
 
     return [...rows].sort(compareTransactionsForRegistry);
+  }
+
+  function getRegistryAvailableYears(kind = state.registry.currentKind) {
+    const years = new Set();
+    for (const tx of state.transactions) {
+      if (tx.kind !== kind) continue;
+      const parsedDate = parseDateSafe(tx.tx_date || tx.created_at);
+      if (parsedDate) {
+        years.add(parsedDate.getFullYear());
+        continue;
+      }
+      const code = normalizeTxCode(tx.tx_code);
+      const match = code.match(/-(\d{2})(?:-.+)?$/);
+      if (match) years.add(2000 + Number(match[1]));
+    }
+    return [...years].sort((a, b) => b - a);
+  }
+
+  function renderRegistryYearOptions() {
+    if (!els.registryFilterYear) return;
+    const years = getRegistryAvailableYears();
+    const currentValue = normalize(state.registry.lastYear || els.registryFilterYear.value);
+    const selectedValue = years.some((y) => String(y) === String(currentValue)) ? String(currentValue) : "";
+    setHTML(
+      els.registryFilterYear,
+      `<option value="">Todos</option>${years
+        .map((year) => `<option value="${year}" ${String(year) === selectedValue ? "selected" : ""}>${year}</option>`)
+        .join("")}`
+    );
   }
 
   function renderRegistryList() {
@@ -4691,7 +4718,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       .sort((a,b)=> state.entryUi.sortDescending ? (Number(b.re_number)-Number(a.re_number)) : (Number(a.re_number)-Number(b.re_number)));
     if(!rows.length){ setHTML(els.entryList,""); show(els.entryListEmpty); return; }
     hide(els.entryListEmpty);
-    setHTML(els.entryList, rows.map((r)=>`<article class="registry-item"><div><div class="list-item-title">${escapeHtml(r.re_code || "RE-") } · ${escapeHtml(r.device_title || "Sin título")}</div><div class="list-item-subtitle">${escapeHtml(formatDate(r.reception_date))}</div></div><div class="registry-item-actions"><button class="btn btn-ghost" data-entry-edit="${escapeHtml(r.id)}">Abrir/Editar</button><button class="btn btn-ghost" data-entry-pdf="${escapeHtml(r.id)}">Abrir PDF</button><button class="btn btn-danger" data-entry-delete="${escapeHtml(r.id)}">Eliminar</button></div></article>`).join(""));
+    setHTML(els.entryList, rows.map((r)=>`<article class="registry-item"><div><div class="list-item-title">${escapeHtml(r.re_code || "RE-") } · ${escapeHtml(r.device_title || "Sin título")}</div><div class="list-item-subtitle">${escapeHtml(formatDate(r.reception_date))}</div></div><div class="registry-item-actions flex flex-wrap gap-2"><button class="btn btn-ghost" data-entry-edit="${escapeHtml(r.id)}">Abrir/Editar</button><button class="btn btn-ghost" data-entry-pdf="${escapeHtml(r.id)}">Abrir PDF</button><button class="btn btn-danger" data-entry-delete="${escapeHtml(r.id)}">Eliminar</button></div></article>`).join(""));
   }
 
   // =========================================
@@ -4829,6 +4856,10 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       renderRegistryList();
     });
 
+    els.registryFilterYear?.addEventListener("change", () => {
+      renderRegistryList();
+    });
+
     [
       els.nicoMaterial,
       els.nicoTotal,
@@ -4885,6 +4916,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
   const previousRenderAllCoreViews = renderAllCoreViews;
   renderAllCoreViews = function patchedRenderAllCoreViews() {
     previousRenderAllCoreViews();
+    renderRegistryYearOptions();
     renderRegistryList();
     renderPendingRecords();
     renderAccountingYearOptions();
@@ -4971,6 +5003,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         .from("transactions")
         .select("tx_code")
         .eq("kind", kind)
+        .like("tx_code", `${prefix}-%-${normalizedYear}`)
         .limit(5000),
       12000
     );
