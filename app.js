@@ -3106,6 +3106,8 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       file_name: fileName,
       file_path: filePath,
       mime_type: "application/pdf",
+      attachment_kind: "transaction_pdf",
+      generated_by_system: true,
     };
 
     const payloadWithTx = {
@@ -3122,6 +3124,17 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         12000
       );
       if (error) throw error;
+      const { data: allRows } = await withTimeout(
+        supabase
+          .from("attachments")
+          .select("id, file_path, created_at")
+          .eq("transaction_id", tx.id)
+          .eq("attachment_kind", "transaction_pdf")
+          .eq("generated_by_system", true)
+          .order("created_at", { ascending: false }),
+        12000
+      );
+      await cleanupDuplicateTransactionPdfAttachments(tx, safeArray(allRows));
       return { fileName, filePath, attachmentId: existingAttachment.id, updated: true };
     }
 
@@ -3138,6 +3151,17 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     }
 
     if (!inserted && lastError) throw lastError;
+    const { data: allRows } = await withTimeout(
+      supabase
+        .from("attachments")
+        .select("id, file_path, created_at")
+        .eq("transaction_id", tx.id)
+        .eq("attachment_kind", "transaction_pdf")
+        .eq("generated_by_system", true)
+        .order("created_at", { ascending: false }),
+      12000
+    );
+    await cleanupDuplicateTransactionPdfAttachments(tx, safeArray(allRows));
 
     return { fileName, filePath, attachmentId: null, updated: false };
   }
@@ -3150,8 +3174,10 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         .from("attachments")
         .select("*")
         .eq("transaction_id", txId)
+        .eq("attachment_kind", "transaction_pdf")
+        .eq("generated_by_system", true)
         .order("created_at", { ascending: false })
-        .limit(1),
+        .limit(10),
       12000
     );
 
@@ -3175,6 +3201,42 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
 
     if (byNameError) throw byNameError;
     return safeArray(rowsByName)[0] || null;
+  }
+
+  function normalizeStoragePath(path) {
+    const raw = normalize(path);
+    if (!raw) return "";
+    return raw.replace(/^\/+/, "").replace(/^customer-files\/+/i, "");
+  }
+
+  async function cleanupDuplicateTransactionPdfAttachments(tx, attachments = []) {
+    if (!tx?.id) return;
+    const duplicates = safeArray(attachments).slice(1);
+    if (!duplicates.length) return;
+    const txCode = getStoredTransactionCode(tx);
+    const mainPath = txCode ? `transactions/${tx.id}/${window.TxPdfService.buildTxPdfFileName({ txCode })}` : "";
+
+    const duplicatePaths = duplicates
+      .map((row) => normalizeStoragePath(row?.file_path))
+      .filter(Boolean)
+      .filter((path) => path !== mainPath);
+
+    if (duplicatePaths.length) {
+      const { error: removeError } = await withTimeout(
+        supabase.storage.from(STORAGE_BUCKET).remove(uniqueBy(duplicatePaths, (p) => p)),
+        15000
+      );
+      if (removeError) throw removeError;
+    }
+
+    const duplicateIds = duplicates.map((row) => row?.id).filter(Boolean);
+    if (duplicateIds.length) {
+      const { error: deleteDupError } = await withTimeout(
+        supabase.from("attachments").delete().in("id", duplicateIds),
+        12000
+      );
+      if (deleteDupError) throw deleteDupError;
+    }
   }
 
   async function openTransactionPdf(txId) {
@@ -3684,44 +3746,37 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
           : getClientRequestId("tx");
 
       if (!txId) {
-        const txYear = getTxYearSuffix(txPayload);
-        let inserted = null;
-        let lastError = null;
-
-        for (let attempt = 0; attempt < 3; attempt += 1) {
-          const reservedCode = await reserveNextTransactionCode(txPayload.kind, txYear);
-          const { data, error } = await withTimeout(
-            supabase
-              .from("transactions")
-              .insert({
-                ...txPayload,
-                tx_code: reservedCode,
-                client_request_id: clientRequestId,
-              })
-              .select("id, tx_code")
-              .single(),
-            18000
-          );
-
-          if (!error && data?.id) {
-            inserted = data;
-            break;
-          }
-
-          lastError = error;
-          const low = String(error?.message || "").toLowerCase();
-          const isTxCodeConflict = low.includes("tx_code") && low.includes("duplicate");
-          if (!isTxCodeConflict) break;
-        }
-
-        if (!inserted) throw lastError || new Error("No se pudo reservar un identificador único.");
+        const { data: inserted, error } = await withTimeout(
+          supabase
+            .from("transactions")
+            .insert({
+              ...txPayload,
+              client_request_id: clientRequestId,
+            })
+            .select("id, kind, tx_code, tx_date, customer_id, total_amount, subtotal_sin_iva, iva_importe, total_con_iva, created_at")
+            .single(),
+          18000
+        );
+        if (error) throw error;
+        if (!inserted?.id) throw new Error("No se pudo guardar la transacción.");
         txId = inserted.id;
         txPayload.tx_code = normalizeTxCode(inserted.tx_code);
+        txPayload.kind = inserted.kind;
+        txPayload.tx_date = inserted.tx_date;
+        txPayload.customer_id = inserted.customer_id;
+        txPayload.total_amount = inserted.total_amount;
+        txPayload.subtotal_sin_iva = inserted.subtotal_sin_iva;
+        txPayload.iva_importe = inserted.iva_importe;
+        txPayload.total_con_iva = inserted.total_con_iva;
+        txPayload.created_at = inserted.created_at;
       } else {
+        const txUpdatePayload = { ...txPayload };
+        delete txUpdatePayload.tx_code;
+        delete txUpdatePayload.kind;
         const { error } = await withTimeout(
           supabase
             .from("transactions")
-            .update(txPayload)
+            .update(txUpdatePayload)
             .eq("id", txId),
           18000
         );
@@ -3823,7 +3878,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     if (!id) return;
 
     const confirmed = window.confirm(
-      "¿Seguro que quieres eliminar este registro? Esta acción no se puede deshacer."
+      "Se eliminará la factura, sus conceptos, devoluciones, adjuntos y PDF. El número quedará libre para reutilizarse."
     );
     if (!confirmed) return;
 
@@ -3853,10 +3908,63 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         return;
       }
 
-      const { error } = await withTimeout(
-        supabase.from("transactions").delete().eq("id", id),
+      const tx = state.transactions.find((row) => row.id === id) || null;
+      const txCode = getStoredTransactionCode(tx);
+      console.info("[tx-delete] start", { txId: id, txCode });
+      const { data: attachments, error: attachmentsError } = await withTimeout(
+        supabase
+          .from("attachments")
+          .select("id, file_path, file_name, attachment_kind, generated_by_system")
+          .eq("transaction_id", id),
+        12000
+      );
+      if (attachmentsError) throw attachmentsError;
+      console.info("[tx-delete] attachments-found", { txId: id, count: safeArray(attachments).length, attachments });
+
+      const normalizedPaths = safeArray(attachments)
+        .map((row) => normalizeStoragePath(row?.file_path))
+        .map((path) => String(path || "").replace(/^\/+/, "").replace(/^customer-files\/+/i, ""))
+        .filter((path) => !!path);
+      if (txCode) {
+        normalizedPaths.push(`transactions/${id}/${txCode}.pdf`);
+      }
+      const paths = uniqueBy(normalizedPaths, (path) => path);
+      console.info("[tx-delete] storage-paths", { txId: id, paths });
+
+      if (paths.length > 0) {
+        const { data: removeData, error: removeError } = await withTimeout(
+          supabase.storage.from(STORAGE_BUCKET).remove(paths),
+          20000
+        );
+        console.info("[tx-delete] storage-remove-result", { txId: id, pathsCount: paths.length, removeData, removeError });
+        if (removeError) {
+          const msg = String(removeError?.message || "").toLowerCase();
+          const hardBlock =
+            msg.includes("permission") ||
+            msg.includes("rls") ||
+            msg.includes("unauthorized") ||
+            msg.includes("forbidden") ||
+            msg.includes("bucket");
+          const notFoundLike =
+            msg.includes("not found") ||
+            msg.includes("no such") ||
+            msg.includes("does not exist") ||
+            msg.includes("404");
+          if (hardBlock || !notFoundLike) {
+            console.error("[tx-delete] storage-remove-blocking-error", removeError);
+            throw new Error(`No se pudieron borrar archivos en Storage: ${removeError.message || "error desconocido"}`);
+          }
+          console.warn("[tx-delete] storage-remove-not-found-non-blocking", removeError);
+        }
+      } else {
+        console.info("[tx-delete] no-valid-paths-skip-storage-remove", { txId: id });
+      }
+
+      const { data: deleteData, error } = await withTimeout(
+        supabase.from("transactions").delete().eq("id", id).select("id"),
         18000
       );
+      console.info("[tx-delete] transactions-delete-result", { txId: id, deleteData, error });
 
       if (error) throw error;
 
@@ -3893,26 +4001,25 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     let txId = editingTxId || null;
 
     if (!txId) {
-      const txYear = getTxYearSuffix(txPayload);
-      const reservedCode = await reserveNextTransactionCode(txPayload.kind, txYear);
-
       const { data, error } = await supabase
         .from("transactions")
         .insert({
           ...txPayload,
-          tx_code: reservedCode,
           client_request_id: clientRequestId || getClientRequestId("tx"),
         })
-        .select("id, tx_code")
+        .select("id, kind, tx_code, tx_date, customer_id, total_amount, subtotal_sin_iva, iva_importe, total_con_iva, created_at")
         .single();
 
       if (error) throw error;
       txId = data.id;
-      txPayload.tx_code = normalizeTxCode(data?.tx_code || reservedCode);
+      txPayload.tx_code = normalizeTxCode(data?.tx_code || "");
     } else {
+      const txUpdatePayload = { ...txPayload };
+      delete txUpdatePayload.tx_code;
+      delete txUpdatePayload.kind;
       const { error } = await supabase
         .from("transactions")
-        .update(txPayload)
+        .update(txUpdatePayload)
         .eq("id", txId);
 
       if (error) throw error;
@@ -5018,30 +5125,12 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     return stored;
   }
 
-  async function reserveNextTransactionCode(kind, year) {
-    const prefix = getKindPrefix(kind);
-    const normalizedYear = String(year || "").padStart(2, "0");
-    const { data, error } = await withTimeout(
-      supabase
-        .from("transactions")
-        .select("tx_code")
-        .eq("kind", kind)
-        .limit(5000),
-      12000
-    );
-    if (error) throw error;
-
-    let maxSeq = 0;
-    for (const row of safeArray(data)) {
-      const seq = extractSequenceFromCode(normalizeTxCode(row?.tx_code), kind, normalizedYear);
-      if (seq > maxSeq) maxSeq = seq;
-    }
-
-    const next = maxSeq + 1;
-    txDiagLog("reserve_next_code", { kind, year: normalizedYear, maxSeq, next });
-
-    const code = `${prefix}-${String(next).padStart(5, "0")}-${normalizedYear}`;
-    return normalizeTxCode(code);
+  /**
+   * @deprecated La reserva de tx_code en frontend está desactivada.
+   * El identificador se asigna exclusivamente en Supabase (trigger BEFORE INSERT).
+   */
+  async function reserveNextTransactionCode() {
+    throw new Error("reserveNextTransactionCode desactivado: el tx_code se genera en Supabase.");
   }
 
   function compareTransactionsChronologicalAsc(a, b) {
