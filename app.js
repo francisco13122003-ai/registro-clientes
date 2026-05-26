@@ -4869,7 +4869,14 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         const hay = buildSearchHaystack([name, customer?.phone, r.re_code, r.device_title]);
         return hay.includes(q);
       })
-      .sort((a,b)=> state.entryUi.sortDescending ? (Number(b.re_number)-Number(a.re_number)) : (Number(a.re_number)-Number(b.re_number)));
+      .sort((a,b)=> {
+        const yearDiff = Number(a.entry_year || 0) - Number(b.entry_year || 0);
+        if (yearDiff !== 0) return state.entryUi.sortDescending ? -yearDiff : yearDiff;
+        const numberDiff = Number(a.re_number || 0) - Number(b.re_number || 0);
+        if (numberDiff !== 0) return state.entryUi.sortDescending ? -numberDiff : numberDiff;
+        const createdDiff = new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+        return state.entryUi.sortDescending ? -createdDiff : createdDiff;
+      });
     if(!rows.length){ setHTML(els.entryList,""); show(els.entryListEmpty); return; }
     hide(els.entryListEmpty);
     setHTML(els.entryList, rows.map((r)=>`<article class="registry-item"><div><div class="list-item-title">${escapeHtml(r.re_code || "RE-") } · ${escapeHtml(r.device_title || "Sin título")}</div><div class="list-item-subtitle">${escapeHtml(formatDate(r.reception_date))}</div></div><div class="registry-item-actions entry-registry-actions"><button class="btn btn-ghost" data-entry-edit="${escapeHtml(r.id)}">Abrir/Editar</button><button class="btn btn-ghost" data-entry-pdf="${escapeHtml(r.id)}">Abrir PDF</button><button class="btn btn-danger" data-entry-delete="${escapeHtml(r.id)}">Eliminar</button></div></article>`).join(""));
