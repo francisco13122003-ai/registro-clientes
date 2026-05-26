@@ -12,13 +12,28 @@
   const MID_GRAY = [140, 140, 140];
   const WHITE = [255, 255, 255];
 
+
+  const SALES_LEGAL_NOTICE = Object.freeze({
+    title: 'CONDICIONES Y GARANTÍAS',
+    paragraphs: [
+      'Conserve este documento para cualquier gestión de garantía, cambio o reclamación.',
+      'Los productos nuevos cuentan con la garantía legal mínima vigente. Los productos reacondicionados o de segunda mano quedan cubiertos por la garantía legal aplicable, salvo pacto específico documentado.',
+      'La garantía cubre faltas de conformidad del producto. No cubre daños por golpes, líquidos, mal uso, manipulación no autorizada, desgaste normal, instalación incorrecta ajena a la empresa, virus/software, pérdida de datos ni pérdida de accesorios.',
+      'Las reparaciones, instalaciones o intervenciones técnicas realizadas por el establecimiento cuentan con una garantía mínima legal de 3 meses sobre la intervención efectuada.',
+      'En compras presenciales, los cambios o devoluciones comerciales solo se admitirán cuando procedan según la política del establecimiento o por garantía legal. No se admitirán cambios de software, licencias activadas, consumibles abiertos, productos personalizados, bajo pedido o manipulados, salvo defecto cubierto por garantía legal.',
+      'El cliente es responsable de realizar copia de seguridad de sus datos antes de cualquier instalación, reparación o manipulación del equipo, salvo contratación expresa de dicho servicio.',
+      'Existen hojas de quejas y reclamaciones a disposición de las personas consumidoras.',
+    ],
+  });
+
   const FLOPITEC_LEGAL = Object.freeze({
     displayName: 'FLOPITEC SERVICIOS INFORMÁTICOS',
     razonSocial: 'Luis Alemán Caballero',
     nif: '24255871W',
     direccion: 'C/ Pablo Iglesias 30 Bajo, 18140, La Zubia, Granada',
     actividad: '',
-    telefono: '',
+    telefono: '958 891 822 / 609 917 893',
+    whatsapp: '642 663 026',
     email: '',
     bankInfoLines: [],
   });
@@ -147,6 +162,7 @@
       showRecipientTaxId: isInvoice,
       companyIssuer: FLOPITEC_LEGAL,
       bankInfoLines: FLOPITEC_LEGAL.bankInfoLines || [],
+      salesLegalNotice: SALES_LEGAL_NOTICE,
     };
   }
 
@@ -241,7 +257,8 @@
           data.showIssuerTaxId && data.companyIssuer.nif ? `NIF/CIF: ${data.companyIssuer.nif}` : '',
           data.companyIssuer.actividad ? `Actividad: ${data.companyIssuer.actividad}` : '',
         ].filter(Boolean).join(' · '),
-        data.companyIssuer.telefono ? `Teléfono: ${data.companyIssuer.telefono}` : '',
+        data.companyIssuer.telefono ? `Tel: ${data.companyIssuer.telefono}` : '',
+        data.companyIssuer.whatsapp ? `WhatsApp: ${data.companyIssuer.whatsapp}` : '',
         data.companyIssuer.email ? `Email: ${data.companyIssuer.email}` : '',
       ].filter(Boolean);
 
@@ -333,7 +350,47 @@
       y += tableHeaderHeight;
     };
 
-    const drawConceptRows = () => {
+    const measureSalesLegalNotice = () => {
+      const legal = data.salesLegalNotice || SALES_LEGAL_NOTICE;
+      const title = String(legal?.title || '').trim();
+      const paragraphs = Array.isArray(legal?.paragraphs) ? legal.paragraphs.filter(Boolean) : [];
+      const fontSize = 5.8;
+      const titleLineStep = mm(2.9);
+      const bodyLineStep = mm(2.7);
+      const paragraphGap = mm(1.2);
+      const topGap = mm(3.2);
+      const textWidth = contentWidth;
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(fontSize);
+      const titleLines = title ? doc.splitTextToSize(title, textWidth) : [];
+      doc.setFont('helvetica', 'normal');
+      const paragraphRows = paragraphs.map((paragraph) => {
+        const lines = doc.splitTextToSize(String(paragraph), textWidth);
+        return { lines: lines.length ? lines : [''] };
+      });
+
+      const titleHeight = titleLines.length * titleLineStep;
+      const bodyHeight = paragraphRows.reduce(
+        (sum, row, index) => sum + row.lines.length * bodyLineStep + (index < paragraphRows.length - 1 ? paragraphGap : 0),
+        0
+      );
+
+      return {
+        legal,
+        fontSize,
+        titleLineStep,
+        bodyLineStep,
+        paragraphGap,
+        topGap,
+        textWidth,
+        titleLines,
+        paragraphRows,
+        totalHeight: topGap + titleHeight + bodyHeight,
+      };
+    };
+
+    const drawConceptRows = (conceptsMaxY) => {
       const lineHeight = mm(4.4);
       const verticalPadding = mm(1.9);
       const minRowHeight = mm(10);
@@ -343,7 +400,9 @@
         const descLines = doc.splitTextToSize(line.concept || 'Concepto', descWidth);
         const rowHeight = Math.max(minRowHeight, descLines.length * lineHeight + verticalPadding * 2);
 
-        ensureSpace(rowHeight, true);
+        if (y + rowHeight > conceptsMaxY) {
+          newPage(true);
+        }
 
         const rowTop = y;
         const rowBottom = rowTop + rowHeight;
@@ -384,40 +443,37 @@
         y = rowBottom;
       });
 
-      if (data.concepts.length <= 1) y += mm(16);
+      if (data.concepts.length <= 1) y += mm(6);
     };
 
-    const drawSubtotal = () => {
-      y += mm(9);
+    const drawSubtotal = (startY) => {
       const blockWidth = mm(64);
       const blockHeight = mm(10);
-      ensureSpace(blockHeight + mm(6), false);
+      const yPos = startY;
 
       const x = margins.left + contentWidth - blockWidth;
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10.5);
-      doc.text('SUBTOTAL', x + mm(3), y + blockHeight / 2 + 3, { baseline: 'middle' });
-      doc.text(formatMoneyEs(data.subtotal), x + blockWidth - mm(3), y + blockHeight / 2 + 3, {
+      doc.text('SUBTOTAL', x + mm(3), yPos + blockHeight / 2 + 3, { baseline: 'middle' });
+      doc.text(formatMoneyEs(data.subtotal), x + blockWidth - mm(3), yPos + blockHeight / 2 + 3, {
         align: 'right',
         baseline: 'middle',
       });
 
       setText(MID_GRAY);
       doc.setLineWidth(0.6);
-      doc.line(x, y + blockHeight, x + blockWidth, y + blockHeight);
+      doc.line(x, yPos + blockHeight, x + blockWidth, yPos + blockHeight);
       setText([0, 0, 0]);
-
-      y += blockHeight;
+      return blockHeight;
     };
 
-    const drawIvaTotalBar = () => {
-      y += mm(8);
+    const drawIvaTotalBar = (startY) => {
       const barHeight = mm(16);
-      ensureSpace(barHeight + mm(6), false);
+      const yPos = startY;
 
       setFill(DARK_GRAY);
-      doc.rect(margins.left, y, contentWidth, barHeight, 'F');
+      doc.rect(margins.left, yPos, contentWidth, barHeight, 'F');
 
       const rightBlockX = margins.left + contentWidth * 0.54;
       const rightBlockW = contentWidth * 0.46;
@@ -425,29 +481,46 @@
       setText(WHITE);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9.5);
-      doc.text(`IVA ${data.ivaPorcentaje}%`, rightBlockX + mm(3), y + mm(6.3));
-      doc.text(formatMoneyEs(data.ivaImporte), rightBlockX + rightBlockW - mm(3), y + mm(6.3), { align: 'right' });
+      doc.text(`IVA ${data.ivaPorcentaje}%`, rightBlockX + mm(3), yPos + mm(6.3));
+      doc.text(formatMoneyEs(data.ivaImporte), rightBlockX + rightBlockW - mm(3), yPos + mm(6.3), { align: 'right' });
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11.5);
-      doc.text(data.totalLabel || 'TOTAL', rightBlockX + mm(3), y + mm(12.7));
+      doc.text(data.totalLabel || 'TOTAL', rightBlockX + mm(3), yPos + mm(12.7));
       doc.setFontSize(13.5);
-      doc.text(formatMoneyEs(data.total), rightBlockX + rightBlockW - mm(3), y + mm(12.9), { align: 'right' });
+      doc.text(formatMoneyEs(data.total), rightBlockX + rightBlockW - mm(3), yPos + mm(12.9), { align: 'right' });
 
       setText([0, 0, 0]);
-      y += barHeight;
+      return barHeight;
     };
 
-    const drawSignatureAndBank = () => {
-      y += mm(10);
 
+    const drawSalesLegalNotice = (startY, legalLayout) => {
+      const { titleLines, paragraphRows, fontSize, topGap, titleLineStep, bodyLineStep, paragraphGap, textWidth } = legalLayout;
+      let yPos = startY + topGap;
+      if (titleLines.length) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(fontSize);
+        doc.text(titleLines, margins.left, yPos);
+        yPos += titleLines.length * titleLineStep;
+      }
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(fontSize);
+      paragraphRows.forEach((row, index) => {
+        doc.text(row.lines, margins.left, yPos, { maxWidth: textWidth, lineHeightFactor: 1.05 });
+        yPos += row.lines.length * bodyLineStep;
+        if (index < paragraphRows.length - 1) yPos += paragraphGap;
+      });
+    };
+
+    const drawSignatureAndBank = (startY) => {
       const stampW = mm(62);
       const stampH = mm(40);
       const rowHeight = stampH + mm(8);
       const bankLines = Array.isArray(data.bankInfoLines) ? data.bankInfoLines.filter(Boolean) : [];
       const bankHeight = bankLines.length ? mm(8) + bankLines.length * mm(4.5) : 0;
-
-      ensureSpace(rowHeight + bankHeight + mm(6), false);
+      const yPos = startY;
 
       const leftWidth = mm(48);
       const rightWidth = mm(46);
@@ -456,38 +529,57 @@
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9.8);
-      doc.text('CONFORME CLIENTE:', margins.left, y + mm(5));
+      doc.text('CONFORME CLIENTE:', margins.left, yPos + mm(5));
 
       // Hueco en blanco para sello físico (intencionalmente vacío)
       doc.setDrawColor(220, 220, 220);
-      doc.rect(centerX, y, stampW, stampH, 'S');
+      doc.rect(centerX, yPos, stampW, stampH, 'S');
       doc.setDrawColor(0, 0, 0);
 
       const rightX = margins.left + contentWidth - rightWidth;
-      doc.text('FIRMADO:', rightX, y + mm(5));
+      doc.text('FIRMADO:', rightX, yPos + mm(5));
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9.5);
-      doc.text(data.companyIssuer.razonSocial || '', rightX, y + mm(11));
+      doc.text(data.companyIssuer.razonSocial || '', rightX, yPos + mm(11));
 
-      y += rowHeight;
-
+      let tailY = yPos + rowHeight;
       if (bankLines.length) {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9.2);
         bankLines.forEach((line) => {
-          doc.text(line, margins.left, y);
-          y += mm(4.5);
+          doc.text(line, margins.left, tailY);
+          tailY += mm(4.5);
         });
       }
+      return rowHeight + bankHeight;
     };
 
     drawTopBar();
     issuerCustomerBlock();
+    y = Math.max(margins.top, y - mm(4));
     drawTableHeader();
-    drawConceptRows();
-    drawSubtotal();
-    drawIvaTotalBar();
-    drawSignatureAndBank();
+    const legalLayout = measureSalesLegalNotice();
+    const subtotalHeight = mm(10);
+    const subtotalGapTop = mm(6);
+    const ivaGapTop = mm(5.2);
+    const ivaHeight = mm(16);
+    const signatureGapTop = mm(6);
+    const signatureHeight = mm(48) + (Array.isArray(data.bankInfoLines) ? data.bankInfoLines.filter(Boolean).length * mm(4.5) : 0);
+    const legalGapTop = mm(3);
+    const bottomBlockHeight =
+      subtotalGapTop + subtotalHeight + ivaGapTop + ivaHeight + signatureGapTop + signatureHeight + legalGapTop + legalLayout.totalHeight;
+    const bottomBlockStartY = pageHeight - margins.bottom - bottomBlockHeight;
+    const conceptsMaxY = bottomBlockStartY - mm(7);
+    drawConceptRows(conceptsMaxY);
+
+    const subtotalY = bottomBlockStartY + subtotalGapTop;
+    drawSubtotal(subtotalY);
+    const ivaY = subtotalY + subtotalHeight + ivaGapTop;
+    drawIvaTotalBar(ivaY);
+    const signatureY = ivaY + ivaHeight + signatureGapTop;
+    const drawnSignatureHeight = drawSignatureAndBank(signatureY);
+    const legalY = signatureY + drawnSignatureHeight + legalGapTop;
+    drawSalesLegalNotice(legalY, legalLayout);
 
     return doc;
   }
