@@ -350,7 +350,47 @@
       y += tableHeaderHeight;
     };
 
-    const drawConceptRows = () => {
+    const measureSalesLegalNotice = () => {
+      const legal = data.salesLegalNotice || SALES_LEGAL_NOTICE;
+      const title = String(legal?.title || '').trim();
+      const paragraphs = Array.isArray(legal?.paragraphs) ? legal.paragraphs.filter(Boolean) : [];
+      const fontSize = 5.8;
+      const titleLineStep = mm(2.9);
+      const bodyLineStep = mm(2.7);
+      const paragraphGap = mm(1.2);
+      const topGap = mm(3.2);
+      const textWidth = contentWidth;
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(fontSize);
+      const titleLines = title ? doc.splitTextToSize(title, textWidth) : [];
+      doc.setFont('helvetica', 'normal');
+      const paragraphRows = paragraphs.map((paragraph) => {
+        const lines = doc.splitTextToSize(String(paragraph), textWidth);
+        return { lines: lines.length ? lines : [''] };
+      });
+
+      const titleHeight = titleLines.length * titleLineStep;
+      const bodyHeight = paragraphRows.reduce(
+        (sum, row, index) => sum + row.lines.length * bodyLineStep + (index < paragraphRows.length - 1 ? paragraphGap : 0),
+        0
+      );
+
+      return {
+        legal,
+        fontSize,
+        titleLineStep,
+        bodyLineStep,
+        paragraphGap,
+        topGap,
+        textWidth,
+        titleLines,
+        paragraphRows,
+        totalHeight: topGap + titleHeight + bodyHeight,
+      };
+    };
+
+    const drawConceptRows = (conceptsMaxY) => {
       const lineHeight = mm(4.4);
       const verticalPadding = mm(1.9);
       const minRowHeight = mm(10);
@@ -360,7 +400,9 @@
         const descLines = doc.splitTextToSize(line.concept || 'Concepto', descWidth);
         const rowHeight = Math.max(minRowHeight, descLines.length * lineHeight + verticalPadding * 2);
 
-        ensureSpace(rowHeight, true);
+        if (y + rowHeight > conceptsMaxY) {
+          newPage(true);
+        }
 
         const rowTop = y;
         const rowBottom = rowTop + rowHeight;
@@ -401,40 +443,37 @@
         y = rowBottom;
       });
 
-      if (data.concepts.length <= 1) y += mm(16);
+      if (data.concepts.length <= 1) y += mm(6);
     };
 
-    const drawSubtotal = () => {
-      y += mm(9);
+    const drawSubtotal = (startY) => {
       const blockWidth = mm(64);
       const blockHeight = mm(10);
-      ensureSpace(blockHeight + mm(6), false);
+      const yPos = startY;
 
       const x = margins.left + contentWidth - blockWidth;
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10.5);
-      doc.text('SUBTOTAL', x + mm(3), y + blockHeight / 2 + 3, { baseline: 'middle' });
-      doc.text(formatMoneyEs(data.subtotal), x + blockWidth - mm(3), y + blockHeight / 2 + 3, {
+      doc.text('SUBTOTAL', x + mm(3), yPos + blockHeight / 2 + 3, { baseline: 'middle' });
+      doc.text(formatMoneyEs(data.subtotal), x + blockWidth - mm(3), yPos + blockHeight / 2 + 3, {
         align: 'right',
         baseline: 'middle',
       });
 
       setText(MID_GRAY);
       doc.setLineWidth(0.6);
-      doc.line(x, y + blockHeight, x + blockWidth, y + blockHeight);
+      doc.line(x, yPos + blockHeight, x + blockWidth, yPos + blockHeight);
       setText([0, 0, 0]);
-
-      y += blockHeight;
+      return blockHeight;
     };
 
-    const drawIvaTotalBar = () => {
-      y += mm(8);
+    const drawIvaTotalBar = (startY) => {
       const barHeight = mm(16);
-      ensureSpace(barHeight + mm(6), false);
+      const yPos = startY;
 
       setFill(DARK_GRAY);
-      doc.rect(margins.left, y, contentWidth, barHeight, 'F');
+      doc.rect(margins.left, yPos, contentWidth, barHeight, 'F');
 
       const rightBlockX = margins.left + contentWidth * 0.54;
       const rightBlockW = contentWidth * 0.46;
@@ -442,79 +481,46 @@
       setText(WHITE);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9.5);
-      doc.text(`IVA ${data.ivaPorcentaje}%`, rightBlockX + mm(3), y + mm(6.3));
-      doc.text(formatMoneyEs(data.ivaImporte), rightBlockX + rightBlockW - mm(3), y + mm(6.3), { align: 'right' });
+      doc.text(`IVA ${data.ivaPorcentaje}%`, rightBlockX + mm(3), yPos + mm(6.3));
+      doc.text(formatMoneyEs(data.ivaImporte), rightBlockX + rightBlockW - mm(3), yPos + mm(6.3), { align: 'right' });
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11.5);
-      doc.text(data.totalLabel || 'TOTAL', rightBlockX + mm(3), y + mm(12.7));
+      doc.text(data.totalLabel || 'TOTAL', rightBlockX + mm(3), yPos + mm(12.7));
       doc.setFontSize(13.5);
-      doc.text(formatMoneyEs(data.total), rightBlockX + rightBlockW - mm(3), y + mm(12.9), { align: 'right' });
+      doc.text(formatMoneyEs(data.total), rightBlockX + rightBlockW - mm(3), yPos + mm(12.9), { align: 'right' });
 
       setText([0, 0, 0]);
-      y += barHeight;
+      return barHeight;
     };
 
 
-    const drawSalesLegalNotice = () => {
-      const legal = data.salesLegalNotice || SALES_LEGAL_NOTICE;
-      const title = String(legal?.title || '').trim();
-      const paragraphs = Array.isArray(legal?.paragraphs) ? legal.paragraphs.filter(Boolean) : [];
-      if (!title && !paragraphs.length) return;
-
-      const fontSize = 6.0;
-      const titleLineStep = mm(3.1);
-      const bodyLineStep = mm(2.9);
-      const paragraphGap = mm(1.4);
-      const topGap = mm(3.5);
-      const textWidth = contentWidth;
-
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(fontSize);
-      const titleLines = title ? doc.splitTextToSize(title, textWidth) : [];
-
-      doc.setFont('helvetica', 'normal');
-      const paragraphRows = paragraphs.map((paragraph) => {
-        const lines = doc.splitTextToSize(String(paragraph), textWidth);
-        return { lines: lines.length ? lines : [''] };
-      });
-
-      const titleHeight = titleLines.length * titleLineStep;
-      const bodyHeight = paragraphRows.reduce(
-        (sum, row, index) => sum + row.lines.length * bodyLineStep + (index < paragraphRows.length - 1 ? paragraphGap : 0),
-        0
-      );
-      const totalHeight = topGap + titleHeight + bodyHeight;
-
-      ensureSpace(totalHeight + mm(2), false);
-
-      y += topGap;
+    const drawSalesLegalNotice = (startY, legalLayout) => {
+      const { titleLines, paragraphRows, fontSize, topGap, titleLineStep, bodyLineStep, paragraphGap, textWidth } = legalLayout;
+      let yPos = startY + topGap;
       if (titleLines.length) {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(fontSize);
-        doc.text(titleLines, margins.left, y);
-        y += titleHeight;
+        doc.text(titleLines, margins.left, yPos);
+        yPos += titleLines.length * titleLineStep;
       }
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(fontSize);
       paragraphRows.forEach((row, index) => {
-        doc.text(row.lines, margins.left, y, { maxWidth: textWidth, lineHeightFactor: 1.05 });
-        y += row.lines.length * bodyLineStep;
-        if (index < paragraphRows.length - 1) y += paragraphGap;
+        doc.text(row.lines, margins.left, yPos, { maxWidth: textWidth, lineHeightFactor: 1.05 });
+        yPos += row.lines.length * bodyLineStep;
+        if (index < paragraphRows.length - 1) yPos += paragraphGap;
       });
     };
 
-    const drawSignatureAndBank = () => {
-      y += mm(10);
-
+    const drawSignatureAndBank = (startY) => {
       const stampW = mm(62);
       const stampH = mm(40);
       const rowHeight = stampH + mm(8);
       const bankLines = Array.isArray(data.bankInfoLines) ? data.bankInfoLines.filter(Boolean) : [];
       const bankHeight = bankLines.length ? mm(8) + bankLines.length * mm(4.5) : 0;
-
-      ensureSpace(rowHeight + bankHeight + mm(6), false);
+      const yPos = startY;
 
       const leftWidth = mm(48);
       const rightWidth = mm(46);
@@ -523,40 +529,57 @@
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9.8);
-      doc.text('CONFORME CLIENTE:', margins.left, y + mm(5));
+      doc.text('CONFORME CLIENTE:', margins.left, yPos + mm(5));
 
       // Hueco en blanco para sello físico (intencionalmente vacío)
       doc.setDrawColor(220, 220, 220);
-      doc.rect(centerX, y, stampW, stampH, 'S');
+      doc.rect(centerX, yPos, stampW, stampH, 'S');
       doc.setDrawColor(0, 0, 0);
 
       const rightX = margins.left + contentWidth - rightWidth;
-      doc.text('FIRMADO:', rightX, y + mm(5));
+      doc.text('FIRMADO:', rightX, yPos + mm(5));
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9.5);
-      doc.text(data.companyIssuer.razonSocial || '', rightX, y + mm(11));
+      doc.text(data.companyIssuer.razonSocial || '', rightX, yPos + mm(11));
 
-      y += rowHeight;
-
+      let tailY = yPos + rowHeight;
       if (bankLines.length) {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9.2);
         bankLines.forEach((line) => {
-          doc.text(line, margins.left, y);
-          y += mm(4.5);
+          doc.text(line, margins.left, tailY);
+          tailY += mm(4.5);
         });
       }
+      return rowHeight + bankHeight;
     };
 
     drawTopBar();
     issuerCustomerBlock();
+    y = Math.max(margins.top, y - mm(4));
     drawTableHeader();
-    drawConceptRows();
-    drawSubtotal();
-    drawIvaTotalBar();
-    drawSalesLegalNotice();
-    drawSignatureAndBank();
-    drawSalesLegalNotice();
+    const legalLayout = measureSalesLegalNotice();
+    const subtotalHeight = mm(10);
+    const subtotalGapTop = mm(6);
+    const ivaGapTop = mm(5.2);
+    const ivaHeight = mm(16);
+    const signatureGapTop = mm(6);
+    const signatureHeight = mm(48) + (Array.isArray(data.bankInfoLines) ? data.bankInfoLines.filter(Boolean).length * mm(4.5) : 0);
+    const legalGapTop = mm(3);
+    const bottomBlockHeight =
+      subtotalGapTop + subtotalHeight + ivaGapTop + ivaHeight + signatureGapTop + signatureHeight + legalGapTop + legalLayout.totalHeight;
+    const bottomBlockStartY = pageHeight - margins.bottom - bottomBlockHeight;
+    const conceptsMaxY = bottomBlockStartY - mm(7);
+    drawConceptRows(conceptsMaxY);
+
+    const subtotalY = bottomBlockStartY + subtotalGapTop;
+    drawSubtotal(subtotalY);
+    const ivaY = subtotalY + subtotalHeight + ivaGapTop;
+    drawIvaTotalBar(ivaY);
+    const signatureY = ivaY + ivaHeight + signatureGapTop;
+    const drawnSignatureHeight = drawSignatureAndBank(signatureY);
+    const legalY = signatureY + drawnSignatureHeight + legalGapTop;
+    drawSalesLegalNotice(legalY, legalLayout);
 
     return doc;
   }
