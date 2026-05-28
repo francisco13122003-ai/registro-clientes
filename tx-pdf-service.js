@@ -102,7 +102,9 @@
         const quantityRaw = Number(it?.quantity ?? 1);
         const quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 ? quantityRaw : 1;
         const lineTotal = toMoney(it?.amount);
-        const unitPrice = quantity > 0 ? toMoney(lineTotal / quantity) : lineTotal;
+        const hasStoredUnitPrice = it?.unit_price !== null && it?.unit_price !== undefined && it?.unit_price !== '';
+        const storedUnitPrice = Number(it?.unit_price);
+        const unitPrice = hasStoredUnitPrice && Number.isFinite(storedUnitPrice) ? toMoney(storedUnitPrice) : (quantity > 0 ? toMoney(lineTotal / quantity) : lineTotal);
 
         return {
           concept,
