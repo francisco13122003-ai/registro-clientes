@@ -170,6 +170,7 @@ const {
     panelCreate: $("panelCreate"),
     panelSearch: $("panelSearch"),
     panelDetail: $("panelDetail"),
+    panelBudgets: $("panelBudgets"),
 
     // home
     homeRecentTxCount: $("homeRecentTxCount"),
@@ -300,6 +301,9 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     btnEntryToggleOrder: $("btnEntryToggleOrder"),
     entryList: $("entryList"),
     entryListEmpty: $("entryListEmpty"),
+    btnBudgetNew: $("btnBudgetNew"), budgetFormBox: $("budgetFormBox"), btnBudgetClose: $("btnBudgetClose"), btnBudgetReset: $("btnBudgetReset"), btnBudgetSave: $("btnBudgetSave"),
+    budgetCustomerSearch: $("budgetCustomerSearch"), budgetCustomerResults: $("budgetCustomerResults"), budgetCustomerSelected: $("budgetCustomerSelected"), btnBudgetCreateCustomer: $("btnBudgetCreateCustomer"), btnBudgetClearCustomer: $("btnBudgetClearCustomer"),
+    budgetDate: $("budgetDate"), budgetValidUntil: $("budgetValidUntil"), budgetStatus: $("budgetStatus"), budgetComments: $("budgetComments"), budgetInternalNotes: $("budgetInternalNotes"), budgetItems: $("budgetItems"), btnBudgetAddItem: $("btnBudgetAddItem"), budgetTotal: $("budgetTotal"), budgetFilterInput: $("budgetFilterInput"), budgetFilterYear: $("budgetFilterYear"), budgetList: $("budgetList"), budgetListEmpty: $("budgetListEmpty"),
 
     nicoConcept: $("nicoConcept"),
     nicoMaterial: $("nicoMaterial"),
@@ -402,6 +406,8 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     transactionItemsByTxId: new Map(),
     expenses: [],
     entryRecords: [],
+    budgets: [],
+    budgetItemsById: new Map(),
 
     currentCustomerId: null,
     currentDetailCustomerId: null,
@@ -441,6 +447,8 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       editingId: null,
     },
 
+    budgetUi: { editingId: null, selectedCustomerId: null, draftItems: [] },
+
     entryUi: {
       editingId: null,
       selectedCustomerId: null,
@@ -474,6 +482,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     "home",
     "registry",
     "entryRegistry",
+    "budgets",
     "accounting",
     "fiscal",
     "expenses",
@@ -486,6 +495,7 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
     home: els.panelHome,
     registry: els.panelRegistry,
     entryRegistry: els.panelEntryRegistry,
+    budgets: els.panelBudgets,
     accounting: els.panelAccounting,
     fiscal: els.panelFiscal,
     expenses: els.panelExpenses,
@@ -547,6 +557,8 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       renderExpensesPanel().catch(console.error);
     } else if (panelName === "entryRegistry") {
       renderEntryRegistryList();
+    } else if (panelName === "budgets") {
+      renderBudgetList();
     }
   }
 
@@ -585,6 +597,8 @@ btnDeleteFromDetail: $("btnDeleteFromDetail"),
       renderExpensesPanel().catch(console.error);
     } else if (panelName === "entryRegistry") {
       renderEntryRegistryList();
+    } else if (panelName === "budgets") {
+      renderBudgetList();
     }
   }
 
@@ -4556,6 +4570,8 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       renderExpensesPanel().catch(console.error);
     } else if (panelName === "entryRegistry") {
       renderEntryRegistryList();
+    } else if (panelName === "budgets") {
+      renderBudgetList();
     }
   };
 
@@ -4577,6 +4593,8 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       renderExpensesPanel().catch(console.error);
     } else if (panelName === "entryRegistry") {
       renderEntryRegistryList();
+    } else if (panelName === "budgets") {
+      renderBudgetList();
     } else if (panelName === "registry") {
       openRegistryPanel().catch(console.error);
     } else if (panelName === "accounting") {
@@ -4638,6 +4656,13 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       openEntryPdf(openEntryPdfId).catch(console.error);
       return;
     }
+
+    const openBudgetEditId = target.dataset.budgetEdit;
+    if (openBudgetEditId) { openBudgetEdit(openBudgetEditId).catch(console.error); return; }
+    const openBudgetPdfId = target.dataset.budgetPdf;
+    if (openBudgetPdfId) { openBudgetPdf(openBudgetPdfId).catch(console.error); return; }
+    const deleteBudgetId = target.dataset.budgetDelete;
+    if (deleteBudgetId) { deleteBudget(deleteBudgetId).catch(console.error); return; }
 
     const deleteEntryId = target.dataset.entryDelete;
     if (deleteEntryId) {
@@ -4882,6 +4907,36 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     setHTML(els.entryList, rows.map((r)=>`<article class="registry-item"><div><div class="list-item-title">${escapeHtml(r.re_code || "RE-") } · ${escapeHtml(r.device_title || "Sin título")}</div><div class="list-item-subtitle">${escapeHtml(formatDate(r.reception_date))}</div></div><div class="registry-item-actions entry-registry-actions"><button class="btn btn-ghost" data-entry-edit="${escapeHtml(r.id)}">Abrir/Editar</button><button class="btn btn-ghost" data-entry-pdf="${escapeHtml(r.id)}">Abrir PDF</button><button class="btn btn-danger" data-entry-delete="${escapeHtml(r.id)}">Eliminar</button></div></article>`).join(""));
   }
 
+
+  async function fetchBudgets() {
+    const { data, error } = await withTimeout(supabase.from("presupuestos").select("*").is("deleted_at", null).limit(REGISTRY_LIMIT), 12000);
+    if (error) throw error;
+    state.budgets = safeArray(data);
+  }
+  function setSelectedBudgetCustomer(customerId) {
+    state.budgetUi.selectedCustomerId = customerId || null;
+    const customer = state.customerMap.get(customerId) || null; const company = state.companyMapByCustomerId.get(customerId) || null;
+    setText(els.budgetCustomerSelected, customer ? customerDisplayName(customer, company) : "—");
+  }
+  function renderBudgetCustomerSearchResults() {
+    const text = normalize(els.budgetCustomerSearch?.value); const results = filterCustomersByText(text).slice(0, 50);
+    if (!results.length) return setHTML(els.budgetCustomerResults, text ? '<div class="empty-box">No se han encontrado clientes.</div>' : '');
+    setHTML(els.budgetCustomerResults, results.map(({ customer, company, displayName }) => `<div class="mini-item ${state.budgetUi.selectedCustomerId === customer.id ? "is-selected" : ""}" data-budget-customer-pick="${escapeHtml(customer.id)}"><div class="mini-item-title">${escapeHtml(displayName)}</div><div class="mini-item-subtitle">${escapeHtml(customer.is_company ? companyDisplayLine(company) : ([customer.phone, customer.address].filter(Boolean).join(" · ") || "Cliente particular"))}</div></div>`).join(""));
+  }
+  function budgetLineTotal(it){ return clampMoney(Number(it.quantity||0) * Number(it.unit_price||0)); }
+  function computeBudgetTotal(){ return clampMoney((state.budgetUi.draftItems||[]).reduce((s,it)=>s+budgetLineTotal(it),0)); }
+  function renderBudgetItems(){ const items=state.budgetUi.draftItems||[]; setText(els.budgetTotal, euro(computeBudgetTotal())); setHTML(els.budgetItems, items.map((it)=>`<div class="grid2" data-budget-row="${it.id}"><input data-budget-concept="${it.id}" placeholder="Concepto" value="${escapeHtml(it.concept||"")}"/><input data-budget-quantity="${it.id}" type="number" min="0.01" step="0.01" value="${escapeHtml(it.quantity)}"/><input data-budget-unit="${it.id}" type="number" min="0" step="0.01" value="${escapeHtml(it.unit_price)}"/><div>Total línea: <strong data-budget-line-total="${it.id}">${escapeHtml(euro(budgetLineTotal(it)))}</strong> <button class="btn btn-ghost" data-budget-remove="${it.id}" type="button">Quitar</button></div></div>`).join("")); }
+  function onBudgetItemsInput(event){ const t=event.target; const id=t.dataset.budgetConcept||t.dataset.budgetQuantity||t.dataset.budgetUnit; if(!id) return; const it=state.budgetUi.draftItems.find(x=>x.id===id); if(!it) return; if(t.dataset.budgetConcept) it.concept=t.value; if(t.dataset.budgetQuantity) it.quantity=t.value; if(t.dataset.budgetUnit) it.unit_price=t.value; const lineTotalEl=els.budgetItems?.querySelector(`[data-budget-line-total="${CSS.escape(String(id))}"]`); if(lineTotalEl) setText(lineTotalEl, euro(budgetLineTotal(it))); setText(els.budgetTotal, euro(computeBudgetTotal())); }
+  function onBudgetItemsClick(event){ const b=event.target.closest('[data-budget-remove]'); if(!b) return; state.budgetUi.draftItems=state.budgetUi.draftItems.filter(x=>x.id!==b.dataset.budgetRemove); renderBudgetItems(); }
+  function resetBudgetForm({keepOpen=false}={}){ state.budgetUi.editingId=null; state.budgetUi.draftItems=[{id:uuidLike(), concept:"", quantity:1, unit_price:0}]; setSelectedBudgetCustomer(null); if(els.budgetCustomerSearch) els.budgetCustomerSearch.value=""; if(els.budgetDate) els.budgetDate.value=todayISO(); if(els.budgetValidUntil) els.budgetValidUntil.value=""; if(els.budgetStatus) els.budgetStatus.value="draft"; if(els.budgetComments) els.budgetComments.value=""; if(els.budgetInternalNotes) els.budgetInternalNotes.value=""; if(els.btnBudgetSave) els.btnBudgetSave.textContent="Crear"; toggle(els.budgetFormBox, !!keepOpen); renderBudgetItems(); }
+  function validateBudgetItems(items){ if(!items.length) return "Debes añadir al menos una línea."; for(const it of items){ if(!normalize(it.concept)) return "Cada línea debe tener concepto."; const q=Number(it.quantity); const u=Number(it.unit_price); if(!(q>0)) return "La cantidad debe ser mayor que 0."; if(!(u>=0)) return "El precio unitario debe ser mayor o igual que 0."; const lt=clampMoney(q*u); if(lt===0 && u!==0) return "El total solo puede ser 0 cuando el precio unitario es 0."; } return ""; }
+  async function saveBudget(){ try { const items=state.budgetUi.draftItems.map(it=>({concept:normalize(it.concept), quantity:clampMoney(it.quantity), unit_price:clampMoney(it.unit_price)})); const err=validateBudgetItems(items); if(err) return showToast(err,'warning'); const total=clampMoney(items.reduce((s,it)=>s+clampMoney(it.quantity*it.unit_price),0)); const payload={customer_id:state.budgetUi.selectedCustomerId,presupuesto_date:normalize(els.budgetDate?.value)||todayISO(),valid_until:normalize(els.budgetValidUntil?.value)||null,status:normalize(els.budgetStatus?.value)||'draft',comments:normalize(els.budgetComments?.value),internal_notes:normalize(els.budgetInternalNotes?.value),total_amount:total}; let saved=null; if(state.budgetUi.editingId){ const {data,error}=await withTimeout(supabase.from('presupuestos').update(payload).eq('id',state.budgetUi.editingId).select('*').single(),12000); if(error) throw error; saved=data; const { error: delItemsErr } = await withTimeout(supabase.from('presupuesto_items').delete().eq('presupuesto_id',saved.id),12000); if (delItemsErr) throw delItemsErr; } else { const {data,error}=await withTimeout(supabase.from('presupuestos').insert(payload).select('*').single(),12000); if(error) throw error; saved=data; } const ins=items.map(it=>({presupuesto_id:saved.id,concept:it.concept,quantity:it.quantity,unit_price:it.unit_price})); const {error:itErr}=await withTimeout(supabase.from('presupuesto_items').insert(ins),12000); if(itErr) throw itErr; const {data:full,error:fullErr}=await withTimeout(supabase.from('presupuestos').select('*').eq('id',saved.id).single(),12000); if(fullErr) throw fullErr; await createAndAttachBudgetPdf(full, items); await fetchBudgets(); renderBudgetList(); resetBudgetForm({keepOpen:false}); showToast('Presupuesto guardado correctamente.','success'); } catch (error) { console.error('Error guardando presupuesto', error); console.error('Detalles Supabase', { message: error?.message, details: error?.details, hint: error?.hint, code: error?.code }); showToast(`No se pudo guardar el presupuesto: ${error?.message || 'error desconocido'}`, 'error', 4500); } }
+  async function createAndAttachBudgetPdf(budget, items){ try { const svc=window.PresupuestoPdfService; const jspdfCtor=window.jspdf?.jsPDF; if(!budget?.id||!budget?.presupuesto_code||!svc||!jspdfCtor) return null; const customer=state.customerMap.get(budget.customer_id)||null; const company=state.companyMapByCustomerId.get(budget.customer_id)||null; const doc=svc.renderPdfToJsPdf({...budget,items,customer_name: customer?customerDisplayName(customer,company):'Cliente',customer_phone:customer?.phone||'',customer_address: customer?.is_company ? [company?.address, company?.postal_code, company?.city, company?.province].filter(Boolean).join(', ') : (customer?.address||'')}, jspdfCtor); const blob=doc.output('blob'); const fileName=svc.buildFileName(String(budget.presupuesto_code || '').toLowerCase()); const filePath=`budgets/${budget.id}/${fileName}`; const {error:up}=await withTimeout(supabase.storage.from(STORAGE_BUCKET).upload(filePath,blob,{upsert:true,contentType:'application/pdf'}),25000); if(up) throw up; let attachmentId=budget.main_attachment_id||null; const basePayload={customer_id:budget.customer_id||null,file_name:fileName,file_path:filePath,mime_type:'application/pdf',attachment_kind:'presupuesto_pdf',generated_by_system:true}; const payloadWithBudget={...basePayload,presupuesto_id:budget.id}; if(attachmentId){ let {error}=await withTimeout(supabase.from('attachments').update(payloadWithBudget).eq('id',attachmentId),12000); if(error){ const fallback=await withTimeout(supabase.from('attachments').update(basePayload).eq('id',attachmentId),12000); error=fallback.error; } if(error) throw error; } else { let inserted=false; let lastError=null; for (const payload of [payloadWithBudget, basePayload]) { const { data, error } = await withTimeout(supabase.from('attachments').insert(payload).select('id').maybeSingle(),12000); if (!error) { attachmentId = data?.id || attachmentId || null; inserted=true; break; } lastError=error; } if(!inserted && lastError) throw lastError; if(!attachmentId){ const { data: row, error: qErr } = await withTimeout(supabase.from('attachments').select('id').eq('file_path', filePath).order('created_at',{ascending:false}).limit(1).maybeSingle(),12000); if(qErr) throw qErr; attachmentId = row?.id || null; } } const {error:updateError}=await withTimeout(supabase.from('presupuestos').update({pdf_file_path:filePath,main_attachment_id:attachmentId,pdf_generated_at:new Date().toISOString()}).eq('id',budget.id),12000); if(updateError) throw updateError; return { fileName, filePath, attachmentId }; } catch (error) { console.error('Error creando PDF presupuesto', error); console.error('Detalles PDF presupuesto', { message: error?.message, details: error?.details, hint: error?.hint, code: error?.code }); throw error; } }
+  async function openBudgetPdf(id){ const {data:row}=await withTimeout(supabase.from('presupuestos').select('pdf_file_path').eq('id',id).maybeSingle(),12000); if(!row?.pdf_file_path) return showToast('Este presupuesto aún no tiene PDF asociado.','warning'); const {data,error}=await withTimeout(supabase.storage.from(STORAGE_BUCKET).createSignedUrl(row.pdf_file_path,120),12000); if(error) throw error; if(data?.signedUrl) window.open(data.signedUrl,'_blank','noopener,noreferrer'); }
+  async function deleteBudget(id){ const b=state.budgets.find(x=>x.id===id)||null; const code=b?.presupuesto_code||'desconocido'; if(!window.confirm(`¿Seguro que quieres eliminar el presupuesto ${code}?`)) return; if(b?.pdf_file_path){ await withTimeout(supabase.storage.from(STORAGE_BUCKET).remove([b.pdf_file_path]),20000);} await withTimeout(supabase.from('attachments').delete().eq('presupuesto_id',id),12000); await withTimeout(supabase.from('presupuesto_items').delete().eq('presupuesto_id',id),12000); const {error}=await withTimeout(supabase.from('presupuestos').delete().eq('id',id),12000); if(error) throw error; await fetchBudgets(); renderBudgetList(); }
+  async function openBudgetEdit(id){ const budget=state.budgets.find(x=>x.id===id); if(!budget) return; const {data:items,error}=await withTimeout(supabase.from('presupuesto_items').select('*').eq('presupuesto_id',id).order('created_at',{ascending:true}),12000); if(error) throw error; state.budgetUi.editingId=id; setSelectedBudgetCustomer(budget.customer_id||null); if(els.budgetDate) els.budgetDate.value=budget.presupuesto_date||todayISO(); if(els.budgetValidUntil) els.budgetValidUntil.value=budget.valid_until||''; if(els.budgetStatus) els.budgetStatus.value=budget.status||'draft'; if(els.budgetComments) els.budgetComments.value=budget.comments||''; if(els.budgetInternalNotes) els.budgetInternalNotes.value=budget.internal_notes||''; state.budgetUi.draftItems=safeArray(items).map(it=>({id:it.id||uuidLike(),concept:it.concept||'',quantity:it.quantity||1,unit_price:it.unit_price||0})); if(!state.budgetUi.draftItems.length) state.budgetUi.draftItems=[{id:uuidLike(),concept:'',quantity:1,unit_price:0}]; if(els.btnBudgetSave) els.btnBudgetSave.textContent='Guardar'; show(els.budgetFormBox); renderBudgetItems(); }
+  function renderBudgetList(){ const q=normalizeLower(els.budgetFilterInput?.value); const y=Number(els.budgetFilterYear?.value||0); const rows=state.budgets.filter(r=>!r.deleted_at).filter(r=>!y||Number(r.presupuesto_year)===y).filter(r=>{ if(!q) return true; const c=state.customerMap.get(r.customer_id)||null; const name=c?customerDisplayName(c,state.companyMapByCustomerId.get(r.customer_id)||null):''; return buildSearchHaystack([name,c?.phone,r.presupuesto_code,r.comments]).includes(q); }).sort((a,b)=>{ const yd=Number(b.presupuesto_year||0)-Number(a.presupuesto_year||0); if(yd) return yd; return Number(b.presupuesto_number||0)-Number(a.presupuesto_number||0);}); if(!rows.length){ setHTML(els.budgetList,''); show(els.budgetListEmpty); return; } hide(els.budgetListEmpty); setHTML(els.budgetList, rows.map(r=>{ const c=state.customerMap.get(r.customer_id)||null; const company=state.companyMapByCustomerId.get(r.customer_id)||null; const name=c?customerDisplayName(c,company):'Cliente'; return `<article class="registry-item"><div><div class="list-item-title">${escapeHtml(r.presupuesto_code||'PR-')} · ${escapeHtml(name)}</div><div class="list-item-subtitle">${escapeHtml(formatDate(r.presupuesto_date))} · ${escapeHtml(euro(r.total_amount||0))} · ${escapeHtml(r.status||'draft')}</div></div><div class="registry-item-actions entry-registry-actions"><button class="btn btn-ghost" data-budget-edit="${escapeHtml(r.id)}">Abrir/Editar</button><button class="btn btn-ghost" data-budget-pdf="${escapeHtml(r.id)}">Abrir PDF</button><button class="btn btn-danger" data-budget-delete="${escapeHtml(r.id)}">Eliminar</button></div></article>`; }).join('')); }
+
   // =========================================
   // BIND PART 2 EVENTS
   // =========================================
@@ -5046,6 +5101,19 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     els.entryFilterInput?.addEventListener("input", debounce(() => renderEntryRegistryList(), 180));
     els.entryFilterYear?.addEventListener("input", () => renderEntryRegistryList());
     els.btnEntryToggleOrder?.addEventListener("click", () => { state.entryUi.sortDescending = !state.entryUi.sortDescending; renderEntryRegistryList(); });
+    els.btnBudgetNew?.addEventListener("click", () => resetBudgetForm({ keepOpen: true }));
+    els.btnBudgetClose?.addEventListener("click", () => resetBudgetForm({ keepOpen: false }));
+    els.btnBudgetReset?.addEventListener("click", () => resetBudgetForm({ keepOpen: true }));
+    els.btnBudgetSave?.addEventListener("click", () => { saveBudget().catch(console.error); });
+    els.btnBudgetAddItem?.addEventListener("click", () => { state.budgetUi.draftItems.push({ id: uuidLike(), concept: "", quantity: 1, unit_price: 0 }); renderBudgetItems(); });
+    els.budgetCustomerSearch?.addEventListener("input", debounce(() => renderBudgetCustomerSearchResults(), 160));
+    els.budgetCustomerResults?.addEventListener("click", (event) => { const item = event.target.closest("[data-budget-customer-pick]"); if (!item) return; setSelectedBudgetCustomer(item.dataset.budgetCustomerPick); renderBudgetCustomerSearchResults(); });
+    els.btnBudgetClearCustomer?.addEventListener("click", () => { setSelectedBudgetCustomer(null); renderBudgetCustomerSearchResults(); });
+    els.btnBudgetCreateCustomer?.addEventListener("click", () => { navigateTo("create"); resetCustomerForm({ preservePanel: true }); });
+    els.budgetFilterInput?.addEventListener("input", debounce(() => renderBudgetList(), 180));
+    els.budgetFilterYear?.addEventListener("input", () => renderBudgetList());
+    els.budgetItems?.addEventListener("input", onBudgetItemsInput);
+    els.budgetItems?.addEventListener("click", onBudgetItemsClick);
 
     document.removeEventListener("click", handleGlobalClick);
     document.addEventListener("click", handleGlobalClick);
@@ -5060,7 +5128,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     state.isBootstrapping = true;
 
     try {
-      await Promise.all([fetchCustomersAndCompanies(), fetchTransactionsFull(), fetchExpenses(), fetchEntryRecords()]);
+      await Promise.all([fetchCustomersAndCompanies(), fetchTransactionsFull(), fetchExpenses(), fetchEntryRecords(), fetchBudgets()]);
       renderAllCoreViews();
       renderAccountingYearOptions();
       renderAccountingView();
