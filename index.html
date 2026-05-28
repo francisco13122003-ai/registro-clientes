@@ -147,6 +147,9 @@
           <button class="nav-btn" data-nav="entryRegistry" type="button">
             Registro de entrada
           </button>
+          <button class="nav-btn" data-nav="budgets" type="button">
+            Presupuestos
+          </button>
           <button class="nav-btn" data-nav="accounting" type="button">
             Contabilidad
           </button>
@@ -222,6 +225,11 @@
               <span class="tile-badge">Entrada</span>
               <div class="tile-title">Registro de entrada</div>
               <div class="tile-subtitle">Recepción de dispositivos y seguimiento</div>
+            </button>
+            <button class="tile" data-nav="budgets" type="button">
+              <span class="tile-badge">Presupuestos</span>
+              <div class="tile-title">Presupuestos</div>
+              <div class="tile-subtitle">Presupuestos no fiscales por cliente</div>
             </button>
 
           </div>
@@ -1276,6 +1284,23 @@
           </section>
         </section>
 
+
+
+        <section id="panelBudgets" class="card panel hidden" aria-labelledby="panelBudgetsTitle">
+          <div class="panel-head"><div><h2 id="panelBudgetsTitle">Presupuestos</h2><p class="muted small">Módulo no fiscal independiente de ventas y contabilidad.</p></div><div class="row"><button id="btnBudgetNew" class="btn btn-primary" type="button">Crear presupuesto</button></div></div>
+          <section id="budgetFormBox" class="subcard hidden">
+            <div class="panel-head"><h3>Nuevo / editar presupuesto</h3><div class="row"><button id="btnBudgetClose" class="btn btn-ghost" type="button">Cerrar</button><button id="btnBudgetReset" class="btn btn-ghost" type="button">Limpiar</button></div></div>
+            <div class="grid2"><div class="field"><label for="budgetCustomerSearch">Cliente (buscar)</label><input id="budgetCustomerSearch" type="text" autocomplete="off" /><div id="budgetCustomerResults" class="mini-list" role="listbox"></div></div><div class="subcard subcard-tight selected-customer-card"><div class="muted small">Cliente seleccionado</div><div id="budgetCustomerSelected" class="bigline">—</div><div class="row row-spaced"><button id="btnBudgetCreateCustomer" class="btn btn-ghost" type="button">Crear ficha</button><button id="btnBudgetClearCustomer" class="btn btn-ghost" type="button">Quitar</button></div></div></div>
+            <div class="grid2"><div class="field"><label for="budgetDate">Fecha presupuesto</label><input id="budgetDate" type="date" /></div><div class="field"><label for="budgetValidUntil">Válido hasta</label><input id="budgetValidUntil" type="date" /></div></div>
+            <div class="grid2"><div class="field"><label for="budgetStatus">Estado</label><select id="budgetStatus" class="select"><option value="draft">Borrador</option><option value="delivered">Entregado</option><option value="accepted">Aceptado</option><option value="rejected">Rechazado</option></select></div></div>
+            <div class="field"><label for="budgetComments">Comentarios visibles</label><textarea id="budgetComments"></textarea></div>
+            <div class="field"><label for="budgetInternalNotes">Notas internas</label><textarea id="budgetInternalNotes"></textarea></div>
+            <div id="budgetItems" class="list"></div><div class="row"><button id="btnBudgetAddItem" class="btn btn-ghost" type="button">Añadir línea</button></div><div class="muted">Total: <strong id="budgetTotal">0,00 €</strong></div>
+            <div class="row"><button id="btnBudgetSave" class="btn btn-primary" type="button">Crear</button></div>
+          </section>
+          <section class="subcard"><div class="grid2 grid2-compact"><div class="field"><label for="budgetFilterInput">Buscar</label><input id="budgetFilterInput" type="text" /></div><div class="field"><label for="budgetFilterYear">Año</label><input id="budgetFilterYear" type="number" min="2000" max="2100" placeholder="Todos" /></div></div><div id="budgetList" class="list list-scroll"></div><div id="budgetListEmpty" class="empty-box hidden">No hay presupuestos.</div></section>
+        </section>
+
         <!-- DETAIL -->
         <section
           id="panelDetail"
@@ -1458,6 +1483,7 @@
 <script src="./fiscal-ui.js"></script>
 <script src="./tx-pdf-service.js"></script>
 <script src="./entry-pdf-service.js"></script>
+<script src="./presupuesto-pdf-service.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="./app.js"></script>
   </body>
