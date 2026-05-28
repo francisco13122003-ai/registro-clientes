@@ -2662,27 +2662,62 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     }
   }
 
+  function normalizeQuantity(value, fallback = 1) {
+    if (value === null || value === undefined || value === "") return fallback;
+    const parsed = toNumber(value);
+    const safe = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    return Number(Number(safe).toFixed(3));
+  }
+
+  function getDraftItemQuantity(item) {
+    return normalizeQuantity(item?.quantity, 1);
+  }
+
+  function getDraftItemUnitPrice(item) {
+    const unit = item?.unit_price;
+    if (unit !== null && unit !== undefined && unit !== "") return clampMoney(unit);
+
+    const quantity = getDraftItemQuantity(item);
+    const amount = clampMoney(item?.amount);
+    return quantity > 0 ? clampMoney(amount / quantity) : amount;
+  }
+
+  function calculateDraftItemAmount(item) {
+    return clampMoney(getDraftItemUnitPrice(item) * getDraftItemQuantity(item));
+  }
+
+  function normalizeDraftItemForEditor(item = {}) {
+    const quantity = normalizeQuantity(item.quantity, 1);
+    const unitPrice =
+      item.unit_price === null || item.unit_price === undefined || item.unit_price === ""
+        ? getDraftItemUnitPrice({ ...item, quantity })
+        : clampMoney(item.unit_price);
+    const amount = clampMoney(unitPrice * quantity);
+
+    return {
+      id: item.id || uuidLike(),
+      concept: normalize(item.concept),
+      quantity: String(quantity),
+      unit_price:
+        item.unit_price === null || item.unit_price === undefined || item.unit_price === ""
+          ? String(unitPrice)
+          : String(item.unit_price),
+      amount: String(amount),
+    };
+  }
+
   function createEmptyDraftItem() {
     return {
       id: uuidLike(),
       concept: "",
-      amount: "",
+      quantity: "1",
+      unit_price: "",
+      amount: "0",
     };
   }
 
   function addDraftItem(item = null) {
-    state.registry.draftItems.push(
-      item
-        ? {
-            id: item.id || uuidLike(),
-            concept: normalize(item.concept),
-            amount:
-              item.amount === null || item.amount === undefined
-                ? ""
-                : String(item.amount),
-          }
-        : createEmptyDraftItem()
-    );
+    state.registry.draftItems.push(item ? normalizeDraftItemForEditor(item) : createEmptyDraftItem());
     renderTxDraftItems();
   }
 
@@ -2704,7 +2739,11 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     state.registry.draftItems = state.registry.draftItems.map((item) => {
       if (item.id !== itemId) return item;
       changed = true;
-      return { ...item, ...patch };
+      const next = { ...item, ...patch };
+      if (Object.prototype.hasOwnProperty.call(patch, "quantity") || Object.prototype.hasOwnProperty.call(patch, "unit_price")) {
+        next.amount = String(calculateDraftItemAmount(next));
+      }
+      return next;
     });
 
     if (!changed) return;
@@ -2719,26 +2758,35 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     }
   }
 
+  function sanitizeTransactionItem(item = {}) {
+    const quantity = normalizeQuantity(item.quantity, 1);
+    const unitPrice = getDraftItemUnitPrice({ ...item, quantity });
+    const amount = clampMoney(unitPrice * quantity);
+
+    return {
+      concept: normalize(item.concept),
+      quantity,
+      unit_price: unitPrice,
+      amount,
+    };
+  }
+
   function getDraftItemsSanitized() {
     return state.registry.draftItems
-      .map((item) => ({
-        concept: normalize(item.concept),
-        amount: clampMoney(item.amount),
-      }))
-      .filter((item) => item.concept || item.amount !== 0);
+      .map(sanitizeTransactionItem)
+      .filter((item) => item.concept || item.unit_price !== 0 || item.amount !== 0);
   }
 
   function snapshotItemsForComparison(items = []) {
-    return safeArray(items).map((item) => ({
-      concept: normalize(item.concept),
-      amount: clampMoney(item.amount),
-    }));
+    return safeArray(items).map(sanitizeTransactionItem);
   }
 
   function areDraftItemsEqual(leftItems = [], rightItems = []) {
     if (leftItems.length !== rightItems.length) return false;
     for (let i = 0; i < leftItems.length; i += 1) {
       if (normalize(leftItems[i]?.concept) !== normalize(rightItems[i]?.concept)) return false;
+      if (normalizeQuantity(leftItems[i]?.quantity, 1) !== normalizeQuantity(rightItems[i]?.quantity, 1)) return false;
+      if (clampMoney(leftItems[i]?.unit_price) !== clampMoney(rightItems[i]?.unit_price)) return false;
       if (clampMoney(leftItems[i]?.amount) !== clampMoney(rightItems[i]?.amount)) return false;
     }
     return true;
@@ -2802,40 +2850,65 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       els.txItems,
       safeItems
         .map(
-          (item, index) => `
-            <div class="item-row" data-item-row="${escapeHtml(item.id)}">
-              <div class="field">
-                <label>Concepto ${index + 1}</label>
-                <input
-                  type="text"
-                  value="${escapeHtml(item.concept || "")}"
-                  data-item-concept="${escapeHtml(item.id)}"
-                  placeholder="Ej: Cambio de pantalla, reparación, accesorio..."
-                />
-              </div>
+          (item, index) => {
+            const lineTotal = calculateDraftItemAmount(item);
+            return `
+              <div class="item-row" data-item-row="${escapeHtml(item.id)}">
+                <div class="field">
+                  <label>Concepto ${index + 1}</label>
+                  <input
+                    type="text"
+                    value="${escapeHtml(item.concept || "")}"
+                    data-item-concept="${escapeHtml(item.id)}"
+                    placeholder="Ej: Cambio de pantalla, reparación, accesorio..."
+                  />
+                </div>
 
-              <div class="field">
-                <label>Importe (€)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  inputmode="decimal"
-                  value="${escapeHtml(item.amount || "")}"
-                  data-item-amount="${escapeHtml(item.id)}"
-                  placeholder="0.00"
-                />
-              </div>
+                <div class="field">
+                  <label>Precio unidad (€)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    inputmode="decimal"
+                    value="${escapeHtml(item.unit_price || "")}"
+                    data-item-unit-price="${escapeHtml(item.id)}"
+                    placeholder="0.00"
+                  />
+                </div>
 
-              <button
-                class="btn btn-danger"
-                type="button"
-                data-remove-item="${escapeHtml(item.id)}"
-                ${safeItems.length === 1 ? "disabled" : ""}
-              >
-                Eliminar
-              </button>
-            </div>
-          `
+                <div class="field">
+                  <label>Cantidad</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    inputmode="decimal"
+                    value="${escapeHtml(item.quantity || "1")}"
+                    data-item-quantity="${escapeHtml(item.id)}"
+                    placeholder="1"
+                  />
+                </div>
+
+                <div class="field">
+                  <label>Total línea</label>
+                  <input
+                    type="text"
+                    value="${escapeHtml(euro(lineTotal))}"
+                    data-item-line-total="${escapeHtml(item.id)}"
+                    readonly
+                  />
+                </div>
+
+                <button
+                  class="btn btn-danger"
+                  type="button"
+                  data-remove-item="${escapeHtml(item.id)}"
+                  ${safeItems.length === 1 ? "disabled" : ""}
+                >
+                  Eliminar
+                </button>
+              </div>
+            `;
+          }
         )
         .join("")
     );
@@ -2854,9 +2927,19 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         return;
       }
 
-      const amountId = target.dataset.itemAmount;
-      if (amountId) {
-        updateDraftItem(amountId, { amount: target.value }, { rerender: false });
+      const unitPriceId = target.dataset.itemUnitPrice;
+      if (unitPriceId) {
+        updateDraftItem(unitPriceId, { unit_price: target.value }, { rerender: false });
+        const lineTotalEl = els.txItems?.querySelector(`[data-item-line-total="${CSS.escape(String(unitPriceId))}"]`);
+        if (lineTotalEl) lineTotalEl.value = euro(calculateDraftItemAmount(state.registry.draftItems.find((item) => item.id === unitPriceId)));
+        return;
+      }
+
+      const quantityId = target.dataset.itemQuantity;
+      if (quantityId) {
+        updateDraftItem(quantityId, { quantity: target.value }, { rerender: false });
+        const lineTotalEl = els.txItems?.querySelector(`[data-item-line-total="${CSS.escape(String(quantityId))}"]`);
+        if (lineTotalEl) lineTotalEl.value = euro(calculateDraftItemAmount(state.registry.draftItems.find((item) => item.id === quantityId)));
       }
     });
 
@@ -2977,7 +3060,15 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     ].join("|");
 
     const itemsPart = (items || [])
-      .map((item) => `${normalizeLower(item.concept)}:${clampMoney(item.amount)}`)
+      .map((item) => {
+        const normalizedItem = sanitizeTransactionItem(item);
+        return [
+          normalizeLower(normalizedItem.concept),
+          normalizeQuantity(normalizedItem.quantity, 1),
+          clampMoney(normalizedItem.unit_price),
+          clampMoney(normalizedItem.amount),
+        ].join(":");
+      })
       .sort()
       .join("|");
 
@@ -3592,6 +3683,8 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
           ? [
               {
                 concept: nico.concept,
+                quantity: 1,
+                unit_price: clampMoney(nico.total_amount),
                 amount: clampMoney(nico.total_amount),
               },
             ]
@@ -3663,6 +3756,17 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     const hasInvalid = items.some((item) => !item.concept);
     if (hasInvalid) {
       return "Cada línea debe tener concepto.";
+    }
+
+    const usedDraftItems = state.registry.draftItems.filter((item) => {
+      const sanitized = sanitizeTransactionItem(item);
+      return sanitized.concept || sanitized.unit_price !== 0 || sanitized.amount !== 0;
+    });
+    if (usedDraftItems.some((item) => !(toNumber(item.quantity) > 0))) {
+      return "La cantidad de cada línea debe ser mayor que 0.";
+    }
+    if (usedDraftItems.some((item) => toNumber(item.unit_price) < 0)) {
+      return "El precio unitario de cada línea debe ser mayor o igual que 0.";
     }
 
     return "";
@@ -3737,7 +3841,9 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
             id: uuidLike(),
             transaction_id: optimisticTxId,
             concept: item.concept,
-            amount: item.amount,
+            quantity: normalizeQuantity(item.quantity, 1),
+            unit_price: clampMoney(item.unit_price),
+            amount: clampMoney(item.amount),
             created_at: new Date().toISOString(),
           }))
         );
@@ -3809,6 +3915,8 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         const rows = itemsPayload.map((item) => ({
           transaction_id: txId,
           concept: item.concept,
+          quantity: normalizeQuantity(item.quantity, 1),
+          unit_price: clampMoney(item.unit_price),
           amount: clampMoney(item.amount),
         }));
 
@@ -3828,7 +3936,12 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       };
       state.transactionItemsByTxId.set(
         txId,
-        itemsPayload.map((item) => ({ concept: item.concept, amount: clampMoney(item.amount) }))
+        itemsPayload.map((item) => ({
+          concept: item.concept,
+          quantity: normalizeQuantity(item.quantity, 1),
+          unit_price: clampMoney(item.unit_price),
+          amount: clampMoney(item.amount),
+        }))
       );
 
       createAndAttachTransactionPdf(txForPdf, { refreshExisting: !!editingTxId })
@@ -4074,6 +4187,8 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       const rows = itemsPayload.map((item) => ({
         transaction_id: txId,
         concept: normalize(item.concept),
+        quantity: normalizeQuantity(item.quantity, 1),
+        unit_price: clampMoney(item.unit_price),
         amount: clampMoney(item.amount),
       }));
 
@@ -4332,11 +4447,7 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       const items = state.transactionItemsByTxId.get(tx.id) || [];
       state.registry.editOriginalItemsSnapshot = snapshotItemsForComparison(items);
       state.registry.draftItems = items.length
-        ? items.map((item) => ({
-            id: item.id || uuidLike(),
-            concept: item.concept || "",
-            amount: String(item.amount ?? ""),
-          }))
+        ? items.map((item) => normalizeDraftItemForEditor(item))
         : [createEmptyDraftItem()];
     }
 
