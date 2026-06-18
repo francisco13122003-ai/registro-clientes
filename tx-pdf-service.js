@@ -316,7 +316,7 @@
       y = Math.max(issuerY, customerY) + mm(12);
     };
 
-    const columnGap = mm(6);
+    const columnGap = mm(4);
     const tableColumns = {
       tableRight: margins.left + contentWidth - mm(2.4),
       descriptionX: margins.left + mm(2.4),
