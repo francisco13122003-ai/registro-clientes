@@ -316,13 +316,13 @@
       y = Math.max(issuerY, customerY) + mm(12);
     };
 
-    const columnGap = mm(3.2);
+    const columnGap = mm(4.5);
     const tableColumns = {
       tableRight: margins.left + contentWidth - mm(2.4),
       descriptionX: margins.left + mm(2.4),
-      priceWidth: mm(34),
-      qtyWidth: mm(24),
-      totalWidth: mm(30),
+      priceWidth: mm(30),
+      qtyWidth: mm(12),
+      totalWidth: mm(34),
     };
     tableColumns.totalX = tableColumns.tableRight;
     tableColumns.qtyX = tableColumns.totalX - tableColumns.totalWidth - columnGap;
@@ -339,8 +339,8 @@
 
       const textY = y + tableHeaderHeight / 2 + 3;
       doc.text('DESCRIPCIÓN', tableColumns.descriptionX, textY, { baseline: 'middle' });
-      doc.text('PRECIO UD', tableColumns.priceX + tableColumns.priceWidth, textY, { align: 'right', baseline: 'middle' });
-      doc.text('CANTIDAD', tableColumns.qtyX + tableColumns.qtyWidth, textY, { align: 'right', baseline: 'middle' });
+      doc.text('P. UD', tableColumns.priceX + tableColumns.priceWidth, textY, { align: 'right', baseline: 'middle' });
+      doc.text('UDS', tableColumns.qtyX + tableColumns.qtyWidth / 2, textY, { align: 'center', baseline: 'middle' });
       doc.text('TOTAL', tableColumns.totalX, textY, { align: 'right', baseline: 'middle' });
 
       setText([0, 0, 0]);
@@ -410,6 +410,9 @@
         if (y + rowHeight > conceptsMaxY && y > margins.top + tableHeaderHeight) {
           newPage(true);
         }
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9.5);
 
         const rowTop = y;
         const rowBottom = rowTop + rowHeight;

@@ -3151,7 +3151,9 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
           .from("transaction_items")
           .select("*")
           .eq("transaction_id", tx.id)
-          .order("created_at", { ascending: true }),
+          .order("line_order", { ascending: true, nullsFirst: false })
+          .order("created_at", { ascending: true })
+          .order("id", { ascending: true }),
         12000
       );
       if (!error) {
@@ -3527,7 +3529,9 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
             supabase
               .from("transaction_items")
               .select("*")
-              .order("created_at", { ascending: true }),
+              .order("line_order", { ascending: true, nullsFirst: false })
+              .order("created_at", { ascending: true })
+              .order("id", { ascending: true }),
             18000
           ),
         ]);
@@ -3837,9 +3841,10 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
         state.transactions.unshift(optimisticTx);
         state.transactionItemsByTxId.set(
           optimisticTxId,
-          itemsPayload.map((item) => ({
+          itemsPayload.map((item, index) => ({
             id: uuidLike(),
             transaction_id: optimisticTxId,
+            line_order: index,
             concept: item.concept,
             quantity: normalizeQuantity(item.quantity, 1),
             unit_price: clampMoney(item.unit_price),
@@ -3912,8 +3917,9 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       }
 
       if (itemsPayload.length) {
-        const rows = itemsPayload.map((item) => ({
+        const rows = itemsPayload.map((item, index) => ({
           transaction_id: txId,
+          line_order: index,
           concept: item.concept,
           quantity: normalizeQuantity(item.quantity, 1),
           unit_price: clampMoney(item.unit_price),
@@ -3936,7 +3942,8 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
       };
       state.transactionItemsByTxId.set(
         txId,
-        itemsPayload.map((item) => ({
+        itemsPayload.map((item, index) => ({
+          line_order: index,
           concept: item.concept,
           quantity: normalizeQuantity(item.quantity, 1),
           unit_price: clampMoney(item.unit_price),
@@ -4184,8 +4191,9 @@ els.btnDeleteFromDetail?.addEventListener("click", deleteCurrentCustomer);
     }
 
     if (safeArray(itemsPayload).length) {
-      const rows = itemsPayload.map((item) => ({
+      const rows = itemsPayload.map((item, index) => ({
         transaction_id: txId,
+        line_order: index,
         concept: normalize(item.concept),
         quantity: normalizeQuantity(item.quantity, 1),
         unit_price: clampMoney(item.unit_price),
