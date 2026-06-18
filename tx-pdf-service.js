@@ -320,7 +320,7 @@
     const tableColumns = {
       tableRight: margins.left + contentWidth - mm(2.4),
       descriptionX: margins.left + mm(2.4),
-      priceWidth: mm(28),
+      priceWidth: mm(24),
       qtyWidth: mm(14),
       totalWidth: mm(34),
     };
