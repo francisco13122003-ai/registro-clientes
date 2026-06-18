@@ -316,13 +316,57 @@
       y = Math.max(issuerY, customerY) + mm(12);
     };
 
-    const columnGap = mm(4);
+    const measureTextWidth = (text, fontStyle = 'normal', fontSize = 9.5) => {
+      doc.setFont('helvetica', fontStyle);
+      doc.setFontSize(fontSize);
+      return doc.getTextWidth(String(text || ''));
+    };
+
+    const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+    const columnPadding = mm(3);
+    const minPriceWidth = mm(16);
+    const minQtyWidth = mm(8);
+    const minTotalWidth = mm(20);
+    const maxPriceWidth = mm(28);
+    const maxQtyWidth = mm(16);
+    const maxTotalWidth = mm(36);
+
+    const priceTexts = [
+      'P. UD',
+      ...data.concepts.map((line) => formatMoneyEs(line.unitPrice)),
+    ];
+    const qtyTexts = [
+      'UDS',
+      ...data.concepts.map((line) => String(line.quantity ?? 1).replace('.', ',')),
+    ];
+    const totalTexts = [
+      'TOTAL',
+      ...data.concepts.map((line) => formatMoneyEs(line.lineTotal)),
+    ];
+
+    const priceWidth = clamp(
+      Math.max(...priceTexts.map((text) => measureTextWidth(text, text === 'P. UD' ? 'bold' : 'normal'))) + columnPadding,
+      minPriceWidth,
+      maxPriceWidth
+    );
+    const qtyWidth = clamp(
+      Math.max(...qtyTexts.map((text) => measureTextWidth(text, text === 'UDS' ? 'bold' : 'normal'))) + columnPadding,
+      minQtyWidth,
+      maxQtyWidth
+    );
+    const totalWidth = clamp(
+      Math.max(...totalTexts.map((text) => measureTextWidth(text, text === 'TOTAL' ? 'bold' : 'normal'))) + columnPadding,
+      minTotalWidth,
+      maxTotalWidth
+    );
+
+    const columnGap = mm(3.2);
     const tableColumns = {
       tableRight: margins.left + contentWidth - mm(2.4),
       descriptionX: margins.left + mm(2.4),
-      priceWidth: mm(24),
-      qtyWidth: mm(14),
-      totalWidth: mm(34),
+      priceWidth,
+      qtyWidth,
+      totalWidth,
     };
     tableColumns.totalX = tableColumns.tableRight;
     tableColumns.totalLeft = tableColumns.totalX - tableColumns.totalWidth;
