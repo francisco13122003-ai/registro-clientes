@@ -318,15 +318,16 @@
 
     const columnGap = mm(3.2);
     const tableColumns = {
+      tableRight: margins.left + contentWidth - mm(2.4),
       descriptionX: margins.left + mm(2.4),
-      priceX: margins.left + contentWidth * 0.62,
-      qtyX: margins.left + contentWidth * 0.79,
-      totalX: margins.left + contentWidth - mm(2.4),
+      priceWidth: mm(34),
+      qtyWidth: mm(24),
+      totalWidth: mm(30),
     };
+    tableColumns.totalX = tableColumns.tableRight;
+    tableColumns.qtyX = tableColumns.totalX - tableColumns.totalWidth - columnGap;
+    tableColumns.priceX = tableColumns.qtyX - tableColumns.qtyWidth - columnGap;
     tableColumns.descriptionWidth = tableColumns.priceX - tableColumns.descriptionX - columnGap;
-    tableColumns.priceWidth = tableColumns.qtyX - tableColumns.priceX - columnGap;
-    tableColumns.qtyWidth = tableColumns.totalX - tableColumns.qtyX - columnGap;
-    tableColumns.totalWidth = tableColumns.totalX - tableColumns.qtyX - tableColumns.qtyWidth / 2 - columnGap;
 
     const drawTableHeader = () => {
       ensureSpace(tableHeaderHeight + mm(5), false);
@@ -338,8 +339,8 @@
 
       const textY = y + tableHeaderHeight / 2 + 3;
       doc.text('DESCRIPCIÓN', tableColumns.descriptionX, textY, { baseline: 'middle' });
-      doc.text('PRECIO UD', tableColumns.qtyX - columnGap, textY, { align: 'right', baseline: 'middle' });
-      doc.text('CANTIDAD', tableColumns.qtyX + tableColumns.qtyWidth / 2, textY, { align: 'center', baseline: 'middle' });
+      doc.text('PRECIO UD', tableColumns.priceX + tableColumns.priceWidth, textY, { align: 'right', baseline: 'middle' });
+      doc.text('CANTIDAD', tableColumns.qtyX + tableColumns.qtyWidth, textY, { align: 'right', baseline: 'middle' });
       doc.text('TOTAL', tableColumns.totalX, textY, { align: 'right', baseline: 'middle' });
 
       setText([0, 0, 0]);
@@ -420,14 +421,14 @@
           lineHeightFactor: 1.15,
         });
 
-        doc.text(formatMoneyEs(line.unitPrice), tableColumns.qtyX - columnGap, amountY, {
+        doc.text(formatMoneyEs(line.unitPrice), tableColumns.priceX + tableColumns.priceWidth, amountY, {
           align: 'right',
           baseline: 'middle',
           maxWidth: tableColumns.priceWidth,
         });
 
-        doc.text(String(line.quantity ?? 1).replace('.', ','), tableColumns.qtyX + tableColumns.qtyWidth / 2, amountY, {
-          align: 'center',
+        doc.text(String(line.quantity ?? 1).replace('.', ','), tableColumns.qtyX + tableColumns.qtyWidth, amountY, {
+          align: 'right',
           baseline: 'middle',
           maxWidth: tableColumns.qtyWidth,
         });
