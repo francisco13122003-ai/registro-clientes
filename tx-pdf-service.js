@@ -316,17 +316,21 @@
       y = Math.max(issuerY, customerY) + mm(12);
     };
 
-    const columnGap = mm(3.2);
+    const columnGap = mm(6);
     const tableColumns = {
+      tableRight: margins.left + contentWidth - mm(2.4),
       descriptionX: margins.left + mm(2.4),
-      priceX: margins.left + contentWidth * 0.62,
-      qtyX: margins.left + contentWidth * 0.79,
-      totalX: margins.left + contentWidth - mm(2.4),
+      priceWidth: mm(28),
+      qtyWidth: mm(14),
+      totalWidth: mm(34),
     };
+    tableColumns.totalX = tableColumns.tableRight;
+    tableColumns.totalLeft = tableColumns.totalX - tableColumns.totalWidth;
+    tableColumns.qtyCenterX = tableColumns.totalLeft - columnGap - tableColumns.qtyWidth / 2;
+    tableColumns.qtyX = tableColumns.qtyCenterX - tableColumns.qtyWidth / 2;
+    tableColumns.priceX = tableColumns.qtyX - columnGap - tableColumns.priceWidth;
+    tableColumns.priceRightX = tableColumns.priceX + tableColumns.priceWidth;
     tableColumns.descriptionWidth = tableColumns.priceX - tableColumns.descriptionX - columnGap;
-    tableColumns.priceWidth = tableColumns.qtyX - tableColumns.priceX - columnGap;
-    tableColumns.qtyWidth = tableColumns.totalX - tableColumns.qtyX - columnGap;
-    tableColumns.totalWidth = tableColumns.totalX - tableColumns.qtyX - tableColumns.qtyWidth / 2 - columnGap;
 
     const drawTableHeader = () => {
       ensureSpace(tableHeaderHeight + mm(5), false);
@@ -338,8 +342,8 @@
 
       const textY = y + tableHeaderHeight / 2 + 3;
       doc.text('DESCRIPCIÓN', tableColumns.descriptionX, textY, { baseline: 'middle' });
-      doc.text('PRECIO UD', tableColumns.qtyX - columnGap, textY, { align: 'right', baseline: 'middle' });
-      doc.text('CANTIDAD', tableColumns.qtyX + tableColumns.qtyWidth / 2, textY, { align: 'center', baseline: 'middle' });
+      doc.text('P. UD', tableColumns.priceRightX, textY, { align: 'right', baseline: 'middle' });
+      doc.text('UDS', tableColumns.qtyCenterX, textY, { align: 'center', baseline: 'middle' });
       doc.text('TOTAL', tableColumns.totalX, textY, { align: 'right', baseline: 'middle' });
 
       setText([0, 0, 0]);
@@ -410,6 +414,9 @@
           newPage(true);
         }
 
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9.5);
+
         const rowTop = y;
         const rowBottom = rowTop + rowHeight;
         const textY = rowTop + verticalPadding + lineHeight - mm(0.5);
@@ -420,13 +427,13 @@
           lineHeightFactor: 1.15,
         });
 
-        doc.text(formatMoneyEs(line.unitPrice), tableColumns.qtyX - columnGap, amountY, {
+        doc.text(formatMoneyEs(line.unitPrice), tableColumns.priceRightX, amountY, {
           align: 'right',
           baseline: 'middle',
           maxWidth: tableColumns.priceWidth,
         });
 
-        doc.text(String(line.quantity ?? 1).replace('.', ','), tableColumns.qtyX + tableColumns.qtyWidth / 2, amountY, {
+        doc.text(String(line.quantity ?? 1).replace('.', ','), tableColumns.qtyCenterX, amountY, {
           align: 'center',
           baseline: 'middle',
           maxWidth: tableColumns.qtyWidth,
