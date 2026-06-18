@@ -316,12 +316,18 @@
       y = Math.max(issuerY, customerY) + mm(12);
     };
 
-    const tableColumns = [
-      { label: 'DESCRIPCIÓN', width: 0.6, align: 'left' },
-      { label: 'PRECIO UD', width: 0.13, align: 'right' },
-      { label: 'CANTIDAD', width: 0.11, align: 'center' },
-      { label: 'TOTAL', width: 0.16, align: 'right' },
-    ];
+    const columnGap = mm(3.2);
+    const tableColumns = {
+      tableRight: margins.left + contentWidth - mm(2.4),
+      descriptionX: margins.left + mm(2.4),
+      priceWidth: mm(34),
+      qtyWidth: mm(26),
+      totalWidth: mm(30),
+    };
+    tableColumns.totalX = tableColumns.tableRight;
+    tableColumns.qtyX = tableColumns.totalX - tableColumns.totalWidth - columnGap;
+    tableColumns.priceX = tableColumns.qtyX - tableColumns.qtyWidth - columnGap;
+    tableColumns.descriptionWidth = tableColumns.priceX - tableColumns.descriptionX - columnGap;
 
     const drawTableHeader = () => {
       ensureSpace(tableHeaderHeight + mm(5), false);
@@ -329,24 +335,13 @@
       doc.rect(margins.left, y, contentWidth, tableHeaderHeight, 'F');
       setText(WHITE);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9.5);
+      doc.setFontSize(9.2);
 
-      let x = margins.left;
-      tableColumns.forEach((col) => {
-        const colW = contentWidth * col.width;
-        const textY = y + tableHeaderHeight / 2 + 3;
-        const leftPad = mm(2.4);
-        const rightPad = mm(2.4);
-
-        if (col.align === 'left') {
-          doc.text(col.label, x + leftPad, textY, { baseline: 'middle' });
-        } else if (col.align === 'center') {
-          doc.text(col.label, x + colW / 2, textY, { align: 'center', baseline: 'middle' });
-        } else {
-          doc.text(col.label, x + colW - rightPad, textY, { align: 'right', baseline: 'middle' });
-        }
-        x += colW;
-      });
+      const textY = y + tableHeaderHeight / 2 + 3;
+      doc.text('DESCRIPCIÓN', tableColumns.descriptionX, textY, { baseline: 'middle' });
+      doc.text('PRECIO UD', tableColumns.priceX + tableColumns.priceWidth, textY, { align: 'right', baseline: 'middle' });
+      doc.text('CANTIDAD', tableColumns.qtyX + tableColumns.qtyWidth, textY, { align: 'right', baseline: 'middle' });
+      doc.text('TOTAL', tableColumns.totalX, textY, { align: 'right', baseline: 'middle' });
 
       setText([0, 0, 0]);
       y += tableHeaderHeight;
@@ -361,11 +356,12 @@
       const bodyLineStep = mm(2.7);
       const paragraphGap = mm(1.2);
       const topGap = mm(3.2);
-      const textWidth = contentWidth;
+      const legalColumnGap = mm(4);
+      const textWidth = (contentWidth - legalColumnGap) / 2;
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(fontSize);
-      const titleLines = title ? doc.splitTextToSize(title, textWidth) : [];
+      const titleLines = title ? doc.splitTextToSize(title, contentWidth) : [];
       doc.setFont('helvetica', 'normal');
       const paragraphRows = paragraphs.map((paragraph) => {
         const lines = doc.splitTextToSize(String(paragraph), textWidth);
@@ -373,10 +369,15 @@
       });
 
       const titleHeight = titleLines.length * titleLineStep;
-      const bodyHeight = paragraphRows.reduce(
-        (sum, row, index) => sum + row.lines.length * bodyLineStep + (index < paragraphRows.length - 1 ? paragraphGap : 0),
-        0
-      );
+      const columnRows = [[], []];
+      const columnHeights = [0, 0];
+      paragraphRows.forEach((row, index) => {
+        const rowHeight = row.lines.length * bodyLineStep + (index < paragraphRows.length - 1 ? paragraphGap : 0);
+        const columnIndex = columnHeights[0] <= columnHeights[1] ? 0 : 1;
+        columnRows[columnIndex].push({ ...row, rowHeight, hasGap: index < paragraphRows.length - 1 });
+        columnHeights[columnIndex] += rowHeight;
+      });
+      const bodyHeight = Math.max(columnHeights[0], columnHeights[1]);
 
       return {
         legal,
@@ -386,9 +387,19 @@
         paragraphGap,
         topGap,
         textWidth,
+        legalColumnGap,
         titleLines,
         paragraphRows,
+        columnRows,
         totalHeight: topGap + titleHeight + bodyHeight,
+      };
+    };
+
+    const measureTextHeight = (text, width, lineHeight) => {
+      const lines = doc.splitTextToSize(String(text || 'Concepto'), width);
+      return {
+        lines: lines.length ? lines : [''],
+        height: Math.max(1, lines.length) * lineHeight,
       };
     };
 
@@ -396,45 +407,44 @@
       const lineHeight = mm(4.4);
       const verticalPadding = mm(1.9);
       const minRowHeight = mm(10);
+      const descriptionWidth = tableColumns.descriptionWidth;
 
       data.concepts.forEach((line) => {
-        const descWidth = contentWidth * tableColumns[0].width - mm(4.8);
-        const descLines = doc.splitTextToSize(line.concept || 'Concepto', descWidth);
-        const rowHeight = Math.max(minRowHeight, descLines.length * lineHeight + verticalPadding * 2);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9.5);
+        const measuredDescription = measureTextHeight(line.concept || 'Concepto', descriptionWidth, lineHeight);
+        const rowHeight = Math.max(minRowHeight, measuredDescription.height + verticalPadding * 2);
 
-        if (y + rowHeight > conceptsMaxY) {
+        if (y + rowHeight > conceptsMaxY && y > margins.top + tableHeaderHeight) {
           newPage(true);
         }
 
         const rowTop = y;
         const rowBottom = rowTop + rowHeight;
+        const textY = rowTop + verticalPadding + lineHeight - mm(0.5);
+        const amountY = rowTop + rowHeight / 2 + 3;
 
-        let x = margins.left;
-        const descriptionColW = contentWidth * tableColumns[0].width;
-        const unitColW = contentWidth * tableColumns[1].width;
-        const qtyColW = contentWidth * tableColumns[2].width;
-        const totalColW = contentWidth * tableColumns[3].width;
+        doc.text(measuredDescription.lines, tableColumns.descriptionX, textY, {
+          maxWidth: descriptionWidth,
+          lineHeightFactor: 1.15,
+        });
 
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9.5);
-        doc.text(descLines, x + mm(2.4), rowTop + verticalPadding + lineHeight - mm(0.5));
-        x += descriptionColW;
-
-        doc.text(formatMoneyEs(line.unitPrice), x + unitColW - mm(2.4), rowTop + rowHeight / 2 + 3, {
+        doc.text(formatMoneyEs(line.unitPrice), tableColumns.priceX + tableColumns.priceWidth, amountY, {
           align: 'right',
           baseline: 'middle',
+          maxWidth: tableColumns.priceWidth,
         });
-        x += unitColW;
 
-        doc.text(String(line.quantity ?? 1).replace('.', ','), x + qtyColW / 2, rowTop + rowHeight / 2 + 3, {
-          align: 'center',
-          baseline: 'middle',
-        });
-        x += qtyColW;
-
-        doc.text(formatMoneyEs(line.lineTotal), x + totalColW - mm(2.4), rowTop + rowHeight / 2 + 3, {
+        doc.text(String(line.quantity ?? 1).replace('.', ','), tableColumns.qtyX + tableColumns.qtyWidth, amountY, {
           align: 'right',
           baseline: 'middle',
+          maxWidth: tableColumns.qtyWidth,
+        });
+
+        doc.text(formatMoneyEs(line.lineTotal), tableColumns.totalX, amountY, {
+          align: 'right',
+          baseline: 'middle',
+          maxWidth: tableColumns.totalWidth,
         });
 
         setText(MID_GRAY);
@@ -498,7 +508,7 @@
 
 
     const drawSalesLegalNotice = (startY, legalLayout) => {
-      const { titleLines, paragraphRows, fontSize, topGap, titleLineStep, bodyLineStep, paragraphGap, textWidth } = legalLayout;
+      const { titleLines, columnRows, fontSize, topGap, titleLineStep, bodyLineStep, paragraphGap, textWidth, legalColumnGap } = legalLayout;
       let yPos = startY + topGap;
       if (titleLines.length) {
         doc.setFont('helvetica', 'bold');
@@ -509,10 +519,14 @@
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(fontSize);
-      paragraphRows.forEach((row, index) => {
-        doc.text(row.lines, margins.left, yPos, { maxWidth: textWidth, lineHeightFactor: 1.05 });
-        yPos += row.lines.length * bodyLineStep;
-        if (index < paragraphRows.length - 1) yPos += paragraphGap;
+      columnRows.forEach((rows, columnIndex) => {
+        let columnY = yPos;
+        const columnX = margins.left + columnIndex * (textWidth + legalColumnGap);
+        rows.forEach((row) => {
+          doc.text(row.lines, columnX, columnY, { maxWidth: textWidth, lineHeightFactor: 1.05 });
+          columnY += row.lines.length * bodyLineStep;
+          if (row.hasGap) columnY += paragraphGap;
+        });
       });
     };
 
@@ -571,7 +585,7 @@
     const bottomBlockHeight =
       subtotalGapTop + subtotalHeight + ivaGapTop + ivaHeight + signatureGapTop + signatureHeight + legalGapTop + legalLayout.totalHeight;
     const bottomBlockStartY = pageHeight - margins.bottom - bottomBlockHeight;
-    const conceptsMaxY = bottomBlockStartY - mm(7);
+    const conceptsMaxY = bottomBlockStartY;
     drawConceptRows(conceptsMaxY);
 
     const subtotalY = bottomBlockStartY + subtotalGapTop;
