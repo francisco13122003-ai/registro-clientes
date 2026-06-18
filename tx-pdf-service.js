@@ -430,8 +430,8 @@
           maxWidth: tableColumns.priceWidth,
         });
 
-        doc.text(String(line.quantity ?? 1).replace('.', ','), tableColumns.qtyX + tableColumns.qtyWidth / 2, amountY, {
-          align: 'center',
+        doc.text(String(line.quantity ?? 1).replace('.', ','), tableColumns.qtyX + tableColumns.qtyWidth, amountY, {
+          align: 'right',
           baseline: 'middle',
           maxWidth: tableColumns.qtyWidth,
         });
